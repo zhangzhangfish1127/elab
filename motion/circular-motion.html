@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圆周运动 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>圆周运动</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>项目</th><th>关系</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>线速度</td><td>v = 2πr / T</td></tr>
+      <tr class="active"><td>周期</td><td>T = 2πr / v</td></tr>
+      <tr class="active"><td>速度方向</td><td>沿切线方向</td></tr>
+      <tr class="active"><td>速度大小</td><td>恒定（匀速圆周）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>半径 r = <span id="rVal">5.0</span> m
+    <input type="range" id="rRange" min="1" max="10" value="5" step="0.5">
+  </label>
+  <label>线速度 v = <span id="vVal">5.0</span> m/s
+    <input type="range" id="vRange" min="1" max="15" value="5" step="0.5">
+  </label>
+
+  <div class="row">
+    <input type="checkbox" id="showVel" checked>
+    <label for="showVel" style="margin:0">显示速度矢量</label>
+  </div>
+  <div class="row">
+    <input type="checkbox" id="showTrail" checked>
+    <label for="showTrail" style="margin:0">显示轨迹</label>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="3" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">小球沿圆周运动，速度矢量始终沿切线</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var r = 5, v = 5;
+  var theta = 0;
+  var t = 0;
+  var playing = false, rafId = null;
+
+  function omega() { return v / r; }   // 角速度 rad/s
+  function period() { return 2 * Math.PI / omega(); }
+
+  function draw() {
+    var ctx = opt.ctx;
+    var W = opt.W, H = opt.H;
+    opt.clear();
+
+    var cx = W / 2;
+    var cy = H / 2;
+    var pxPerM = Math.min(W, H) * 0.35 / r;
+    var R = r * pxPerM;
+
+    // 轨迹圆
+    ctx.save();
+    if (document.getElementById('showTrail').checked) {
+      ctx.strokeStyle = 'rgba(52,152,219,0.35)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(52,152,219,0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 圆心
+    ctx.save();
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('圆心 O', cx + 8, cy - 8);
+    ctx.restore();
+
+    // 半径连线
+    var bx = cx + R * Math.cos(theta);
+    var by = cy + R * Math.sin(theta);
+    ctx.save();
+    ctx.strokeStyle = '#95a5a6';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.fillStyle = '#555';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    var midX = (cx + bx) / 2, midY = (cy + by) / 2;
+    ctx.fillText('r=' + r.toFixed(1) + 'm', midX + 20, midY - 5);
+    ctx.restore();
+
+    // 小球
+    ctx.save();
+    var grad = ctx.createRadialGradient(bx - 4, by - 4, 2, bx, by, 14);
+    grad.addColorStop(0, '#f39c12');
+    grad.addColorStop(1, '#c0392b');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(bx, by, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // 速度矢量（切线方向）
+    if (document.getElementById('showVel').checked) {
+      var tangX = -Math.sin(theta);
+      var tangY = Math.cos(theta);
+      var scaleV = 5;
+      var vEndX = bx + tangX * v * scaleV;
+      var vEndY = by + tangY * v * scaleV;
+      ctx.save();
+      ctx.strokeStyle = '#27ae60';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(vEndX, vEndY);
+      ctx.stroke();
+      // 箭头
+      var angle = Math.atan2(vEndY - by, vEndX - bx);
+      ctx.fillStyle = '#27ae60';
+      ctx.beginPath();
+      ctx.moveTo(vEndX, vEndY);
+      ctx.lineTo(vEndX - Math.cos(angle - 0.4) * 12, vEndY - Math.sin(angle - 0.4) * 12);
+      ctx.lineTo(vEndX - Math.cos(angle + 0.4) * 12, vEndY - Math.sin(angle + 0.4) * 12);
+      ctx.closePath();
+      ctx.fill();
+      // 标注
+      ctx.fillStyle = '#27ae60';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('v=' + v.toFixed(1) + ' m/s', vEndX + 6, vEndY - 4);
+      ctx.restore();
+    }
+
+    // 角速度指示
+    ctx.save();
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#f39c12';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ω', cx, cy - 36);
+    ctx.restore();
+
+    // 侧栏
+    document.getElementById('rVal').textContent = r.toFixed(1);
+    document.getElementById('vVal').textContent = v.toFixed(1);
+    document.getElementById('rRange').value = r;
+    document.getElementById('vRange').value = v;
+
+    var T = period();
+    var omegaVal = omega();
+    var angleDeg = (theta * 180 / Math.PI) % 360;
+    var fullTurns = Math.floor(t / T);
+
+    document.getElementById('readout').innerHTML =
+      '当前时间 t = <b>' + t.toFixed(2) + '</b> s<br>' +
+      '已转 <b>' + fullTurns + '</b> 圈，角度 <b>' + angleDeg.toFixed(1) + '°</b><br>' +
+      '线速度 v = <b>' + v.toFixed(2) + '</b> m/s（大小恒定）<br>' +
+      '角速度 ω = v/r = <b>' + omegaVal.toFixed(3) + '</b> rad/s<br>' +
+      '周期 T = 2πr/v = <b>' + T.toFixed(3) + '</b> s<br>' +
+      '<span style="font-size:12px;color:#888">匀速圆周：速度大小不变，方向时刻改变</span>';
+  }
+
+  document.getElementById('rRange').addEventListener('input', function(e){ r = parseFloat(e.target.value); draw(); });
+  document.getElementById('vRange').addEventListener('input', function(e){ v = parseFloat(e.target.value); draw(); });
+  document.getElementById('showVel').addEventListener('change', draw);
+  document.getElementById('showTrail').addEventListener('change', draw);
+  document.getElementById('speedRange').addEventListener('input', function(e){
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){ t = 0; theta = 0; stopPlay(); draw(); });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var spd = parseFloat(document.getElementById('speedRange').value);
+    var dt = 0.03 * spd;
+    t += dt;
+    theta += omega() * dt;
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (playing) stopPlay();
+    else {
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
