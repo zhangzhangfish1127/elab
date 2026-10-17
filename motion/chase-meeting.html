@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>追及与相遇 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>追及与相遇</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>类型</th><th>公式</th></tr></thead>
+    <tbody>
+      <tr data-case="chase" class="active"><td>追及（同向）</td><td>t = Δs / (v₁ - v₂)</td></tr>
+      <tr data-case="meet"><td>相遇（相向）</td><td>t = Δs / (v₁ + v₂)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+
+  <div class="row">
+    <label style="margin:0;white-space:nowrap">运动类型</label>
+    <select id="typeSel">
+      <option value="chase" selected>追及（同向）</option>
+      <option value="meet">相遇（相向）</option>
+    </select>
+  </div>
+
+  <label>甲速度 v₁ = <span id="v1Val">10.0</span> m/s
+    <input type="range" id="v1Range" min="2" max="20" value="10" step="0.5">
+  </label>
+  <label>乙速度 v₂ = <span id="v2Val">5.0</span> m/s
+    <input type="range" id="v2Range" min="2" max="20" value="5" step="0.5">
+  </label>
+  <label>初始距离 Δs = <span id="dsVal">100</span> m
+    <input type="range" id="dsRange" min="20" max="300" value="100" step="10">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="3" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">切换追及/相遇，观察两车距离变化</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var v1 = 10, v2 = 5, ds = 100;
+  var t = 0;
+  var playing = false, rafId = null;
+
+  function getType() {
+    return document.getElementById('typeSel').value;
+  }
+
+  // 相遇/追及所需时间
+  function findTime() {
+    var relV = getType() === 'chase' ? (v1 - v2) : (v1 + v2);
+    if (relV <= 0.01) return Infinity;
+    return ds / relV;
+  }
+
+  // 当前两车位置（甲在前/后，乙相对）
+  function posAt(tt) {
+    if (getType() === 'chase') {
+      // 甲在乙后面，甲追乙，同向正方向运动
+      var xA = v1 * tt;
+      var xB = ds + v2 * tt;
+      return { xA: xA, xB: xB };
+    } else {
+      // 相向：甲从 0 出发向右，乙从 ds 出发向左
+      var xA2 = v1 * tt;
+      var xB2 = ds - v2 * tt;
+      return { xA: xA2, xB: xB2 };
+    }
+  }
+
+  function drawCar(cx, cy, color, label, v) {
+    var ctx = opt.ctx;
+    var w = 60, h = 30;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.fillRect(cx - w/2, cy - h, w, h);
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - w/2, cy - h, w, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(cx - 18, cy - h - 12, 36, 12);
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath(); ctx.arc(cx - 16, cy, 7, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 16, cy, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy - h/2);
+    // 速度箭头
+    var dir = v > 0 ? 1 : -1;
+    var aLen = Math.min(50, Math.abs(v) * 3);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx + dir * (w/2 + 5), cy - h/2);
+    ctx.lineTo(cx + dir * (w/2 + 5 + aLen), cy - h/2);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(cx + dir * (w/2 + 5 + aLen), cy - h/2);
+    ctx.lineTo(cx + dir * (w/2 + 5 + aLen - 10), cy - h/2 - 7);
+    ctx.lineTo(cx + dir * (w/2 + 5 + aLen - 10), cy - h/2 + 7);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    var ctx = opt.ctx;
+    var W = opt.W, H = opt.H;
+    opt.clear();
+
+    var type = getType();
+    var totalDist = (type === 'chase') ? ds * 2 : ds * 1.4;
+    var roadY = H * 0.55;
+    var marginX = 60;
+    var ppm = (W - marginX * 2) / totalDist;
+
+    // 路面
+    ctx.save();
+    ctx.fillStyle = '#34495e';
+    ctx.fillRect(0, roadY, W, 40);
+    ctx.strokeStyle = '#f1c40f';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([14, 14]);
+    ctx.beginPath();
+    ctx.moveTo(0, roadY + 20);
+    ctx.lineTo(W, roadY + 20);
+    ctx.stroke();
+    ctx.restore();
+
+    // 距离刻度
+    ctx.save();
+    ctx.fillStyle = '#888';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    var step = totalDist > 200 ? 50 : 20;
+    for (var m = 0; m <= totalDist; m += step) {
+      var px = marginX + m * ppm;
+      ctx.beginPath();
+      ctx.moveTo(px, roadY + 42);
+      ctx.lineTo(px, roadY + 50);
+      ctx.stroke();
+      ctx.fillText(m + 'm', px, roadY + 62);
+    }
+    ctx.restore();
+
+    // 位置
+    var pos = posAt(t);
+    var xA = marginX + pos.xA * ppm;
+    var xB = marginX + pos.xB * ppm;
+
+    // 两车
+    drawCar(xA, roadY, '#e74c3c', '甲', type === 'chase' ? v1 : v1);
+    drawCar(xB, roadY, '#2980b9', '乙', type === 'chase' ? v2 : -v2);
+
+    // 相遇点标记（虚线）
+    if (isFinite(findTime())) {
+      var meetT = findTime();
+      var meetPos = posAt(meetT);
+      var meetPx = marginX + meetPos.xA * ppm;
+      ctx.save();
+      ctx.strokeStyle = '#f39c12';
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(meetPx, roadY - 90);
+      ctx.lineTo(meetPx, roadY + 55);
+      ctx.stroke();
+      ctx.fillStyle = '#f39c12';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(type === 'chase' ? '追上位置' : '相遇位置', meetPx, roadY - 96);
+      ctx.restore();
+    }
+
+    // 两车距离
+    var gap = Math.abs(pos.xB - pos.xA);
+    ctx.save();
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(xA, xB), roadY + 90);
+    ctx.lineTo(Math.max(xA, xB), roadY + 90);
+    ctx.stroke();
+    ctx.fillStyle = '#f39c12';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('相距 ' + gap.toFixed(1) + ' m', (xA + xB) / 2, roadY + 85);
+    ctx.restore();
+
+    // 表格高亮
+    document.querySelectorAll('#caseTable tbody tr').forEach(function (tr) {
+      tr.classList.toggle('active', tr.dataset.case === type);
+    });
+
+    // 侧栏
+    document.getElementById('v1Val').textContent = v1.toFixed(1);
+    document.getElementById('v2Val').textContent = v2.toFixed(1);
+    document.getElementById('dsVal').textContent = ds;
+    document.getElementById('v1Range').value = v1;
+    document.getElementById('v2Range').value = v2;
+    document.getElementById('dsRange').value = ds;
+
+    // 读数
+    var meetT = findTime();
+    var done = t >= meetT;
+    document.getElementById('readout').innerHTML =
+      '当前时间 t = <b>' + t.toFixed(2) + '</b> s<br>' +
+      '甲位置 x₁ = <b>' + pos.xA.toFixed(1) + '</b> m<br>' +
+      '乙位置 x₂ = <b>' + pos.xB.toFixed(1) + '</b> m<br>' +
+      '相距 <b>' + gap.toFixed(1) + '</b> m<br>' +
+      (isFinite(meetT) ? (done ?
+        '<b style="color:#27ae60">✓ 已' + (type === 'chase' ? '追上' : '相遇') + '</b>'
+        : '还需 <b>' + (meetT - t).toFixed(2) + '</b> s') :
+        '<b style="color:#e67e22">追不上（v₁ ≤ v₂）</b>');
+  }
+
+  document.getElementById('typeSel').addEventListener('change', function(){ t = 0; stopPlay(); draw(); });
+  document.getElementById('v1Range').addEventListener('input', function(e){ v1 = parseFloat(e.target.value); t = 0; draw(); });
+  document.getElementById('v2Range').addEventListener('input', function(e){ v2 = parseFloat(e.target.value); t = 0; draw(); });
+  document.getElementById('dsRange').addEventListener('input', function(e){ ds = parseFloat(e.target.value); t = 0; draw(); });
+  document.getElementById('speedRange').addEventListener('input', function(e){
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    v1 = 10; v2 = 5; ds = 100; t = 0;
+    document.getElementById('v1Range').value = 10;
+    document.getElementById('v2Range').value = 5;
+    document.getElementById('dsRange').value = 100;
+    document.getElementById('typeSel').value = 'chase';
+    stopPlay(); draw();
+  });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var spd = parseFloat(document.getElementById('speedRange').value);
+    t += 0.03 * spd;
+    draw();
+    var mt = findTime();
+    if (isFinite(mt) && t > mt + 2) { stopPlay(); return; }
+    if (!isFinite(mt) && t > 10) { stopPlay(); return; }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (playing) stopPlay();
+    else {
+      var mt = findTime();
+      if (isFinite(mt) && t >= mt) t = 0;
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
