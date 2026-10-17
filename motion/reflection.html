@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>光的反射定律 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html" data-i18n="common.home">← 返回主页</a>
+<h1 data-i18n="rf.title">光的反射定律</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>项目</th><th>关系</th></tr></thead>
+    <tbody><tr class="active"><td>入射角 θ₁</td><td>等于反射角 θ₂</td></tr></tbody>
+  </table>
+
+  <h3 data-i18n="common.panel">控制面板</h3>
+
+  <label>入射角 θ₁ = <span id="aVal">45.0</span>°
+    <input type="range" id="aRange" min="0" max="85" value="45" step="1">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+
+  <div style="font-size:13px;color:#666;margin-bottom:8px" data-i18n="common.playMode">播放模式</div>
+  <div class="row">
+    <input type="checkbox" id="playToggle" checked>
+    <label for="playToggle" style="margin:0">入射角自动变化</label>
+  </div>
+  <div class="row">
+    <label style="margin:0;white-space:nowrap" data-i18n="common.direction">方向</label>
+    <select id="playDir">
+      <option value="increase">逐渐增大</option>
+      <option value="decrease">逐渐减小</option>
+      <option value="pingpong" selected>来回</option>
+    </select>
+  </div>
+  <label><span data-i18n="common.speed">速度</span> = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="5" value="1" step="0.1">
+  </label>
+
+  <button id="playBtn" data-i18n="common.play">▶ 播放</button>
+  <button id="resetBtn" class="secondary" data-i18n="common.reset">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="legend">
+      <span id="lgIn" style="--c:#e74c3c">入射光线</span>
+      <span id="lgRe" style="--c:#27ae60">反射光线</span>
+      <span id="lgNm" style="--c:#7f8c8d">法线</span>
+    </div>
+    <div class="hint">拖动入射光线（左上方）或滑块，改变入射角</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  App.applyLang();
+
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 4 });
+
+  var angle = 45;
+  var rayLen = 60;
+  var playing = false;
+  var playDir = 1;
+  var rafId = null;
+  var dragging = false;
+
+  function draw() {
+    var TH = App.getTheme();
+    opt.clear();
+    var shown = angle.toFixed(1);
+
+    opt.drawHorizontalMirror(-80, 80, 0);
+    opt.drawVerticalNormal(0, -40, 40, TH.normal);
+
+    var rad = angle * Math.PI / 180;
+    var ix = -rayLen * Math.sin(rad);
+    var iy = rayLen * Math.cos(rad);
+    opt.drawArrowRay(ix, iy, 0, 0, TH.ray1, 0.55);
+
+    opt.drawArrowRay(0, 0, rayLen * Math.sin(rad), rayLen * Math.cos(rad), TH.ray2, 0.55);
+
+    opt.drawAngleArc(0, 0, 18, Math.PI / 2, Math.PI / 2 + rad, TH.ray1, 'θ₁=' + shown + '°');
+    opt.drawAngleArc(0, 0, 26, Math.PI / 2 - rad, Math.PI / 2, TH.ray2, 'θ₂=' + shown + '°');
+
+    opt.drawPoint(0, 0, '#2c3e50', 'O');
+
+    document.getElementById('lgIn').style.setProperty('--c', TH.ray1);
+    document.getElementById('lgRe').style.setProperty('--c', TH.ray2);
+    document.getElementById('lgNm').style.setProperty('--c', TH.normal);
+
+    document.getElementById('aVal').textContent = shown;
+    document.getElementById('aRange').value = angle;
+    document.getElementById('readout').innerHTML =
+      '入射角 θ₁ = <b>' + shown + '°</b><br>' +
+      '反射角 θ₂ = <b>' + shown + '°</b><br>' +
+      '关系：<b>θ₁ = θ₂</b>（反射定律）';
+  }
+
+  document.getElementById('aRange').addEventListener('input', function(e) {
+    angle = parseFloat(e.target.value); draw();
+  });
+  document.getElementById('speedRange').addEventListener('input', function(e) {
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+
+  function startDrag(e) {
+    var rect = canvas.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    var w = opt.toWorld(t.clientX - rect.left, t.clientY - rect.top);
+    var wx = w[0], wy = w[1];
+    var rad = angle * Math.PI / 180;
+    var ix = -rayLen * Math.sin(rad), iy = rayLen * Math.cos(rad);
+    var dx = -ix, dy = -iy;
+    var tt = Math.max(0, Math.min(1, ((wx - ix) * dx + (wy - iy) * dy) / (dx*dx + dy*dy)));
+    var px = ix + tt * dx, py = iy + tt * dy;
+    if (Math.hypot(wx - px, wy - py) < 20 || (wy > 0 && wx < 0)) {
+      dragging = true; stopPlay();
+      updateAngle(wx, wy); e.preventDefault();
+    }
+  }
+  function moveDrag(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    var rect = canvas.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    var w = opt.toWorld(t.clientX - rect.left, t.clientY - rect.top);
+    updateAngle(w[0], w[1]);
+  }
+  function updateAngle(wx, wy) {
+    if (wy <= 0 || wx >= 0) return;
+    var deg = Math.atan2(-wx, wy) * 180 / Math.PI;
+    angle = Math.max(0, Math.min(85, Math.round(deg * 10) / 10));
+    draw();
+  }
+  function endDrag() { dragging = false; }
+
+  canvas.addEventListener('mousedown', startDrag);
+  canvas.addEventListener('mousemove', moveDrag);
+  canvas.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('mouseleave', endDrag);
+  canvas.addEventListener('touchstart', startDrag, { passive: false });
+  canvas.addEventListener('touchmove', moveDrag, { passive: false });
+  canvas.addEventListener('touchend', endDrag);
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = App.t('common.play');
+  }
+
+  function tick() {
+    if (!playing) return;
+    var mode = document.getElementById('playDir').value;
+    var spd = parseFloat(document.getElementById('speedRange').value) * 0.5;
+    var dir = mode === 'increase' ? 1 : mode === 'decrease' ? -1 : playDir;
+    angle += dir * spd;
+    if (angle > 85) { angle = 85; if (mode === 'pingpong') playDir = -1; }
+    if (angle < 0)  { angle = 0;  if (mode === 'pingpong') playDir = 1; }
+    angle = Math.round(angle * 10) / 10;
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function() {
+    if (playing) stopPlay();
+    else {
+      playing = true; playDir = 1;
+      document.getElementById('playBtn').textContent = App.t('common.pause');
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    angle = 45; playDir = 1;
+    document.getElementById('speedRange').value = 1;
+    document.getElementById('speedVal').textContent = '1.0';
+    stopPlay(); draw();
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('langchange', function() {
+    document.getElementById('playBtn').textContent = playing ? App.t('common.pause') : App.t('common.play');
+  });
+  window.addEventListener('resize', function() { opt._initHiDPI(); draw(); });
+
+  draw();
+})();
+</script>
+</body>
+</html>
