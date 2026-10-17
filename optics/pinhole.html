@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小孔成像 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>小孔成像</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table" id="caseTable">
+    <thead><tr><th>项目</th><th>关系</th></tr></thead>
+    <tbody>
+      <tr data-case="real" class="active"><td>像的性质</td><td>倒立、实像</td></tr>
+      <tr data-case="ratio" class="active"><td>像高 / 物高</td><td>= 像距 / 物距</td></tr>
+      <tr data-case="size" class="active"><td>像的大小</td><td>随像距增大而增大</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>物距 u = <span id="uVal">25.0</span> cm
+    <input type="range" id="uRange" min="5" max="60" value="25" step="0.5">
+  </label>
+  <label>像距 v = <span id="vVal">20.0</span> cm
+    <input type="range" id="vRange" min="5" max="60" value="20" step="0.5">
+  </label>
+  <label>物高 H = <span id="hVal">10.0</span> cm
+    <input type="range" id="hRange" min="4" max="20" value="10" step="0.5">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <div class="row">
+    <input type="checkbox" id="playScreen" checked>
+    <label for="playScreen" style="margin:0">光屏移动</label>
+  </div>
+  <div class="row">
+    <label style="margin:0;white-space:nowrap">方向</label>
+    <select id="playDir">
+      <option value="away">远离小孔</option>
+      <option value="toward">靠近小孔</option>
+      <option value="pingpong" selected>来回</option>
+    </select>
+  </div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="5" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">拖动蜡烛（左）或光屏（右）改变距离</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 3 });
+  var u = 25, v = 20, H = 10;
+  var dragging = null;
+  var playing = false, playDir = 1, rafId = null;
+
+  function draw() {
+    var TH = App.getTheme();
+    opt.clear();
+    opt.drawAxis();
+
+    // 挡板（小孔在原点）
+    opt.drawRay(0, 32, 0, 1.5, '#34495e', 8);
+    opt.drawRay(0, -1.5, 0, -32, '#34495e', 8);
+    opt.drawPoint(0, 0, '#e67e22');
+    opt.drawLabel(0, 4, '小孔', '#e67e22');
+
+    // 蜡烛
+    opt.drawCandle(-u, H, '#f5d76e', '#c9a227', TH.obj);
+    opt.drawLabel(-u, H, '物', TH.obj);
+
+    var imgH = H * v / u;
+
+    // 光屏
+    opt.drawScreen(v, imgH + 6, true);
+    opt.drawLabel(v, imgH + 4, '光屏', '#7f8c8d');
+
+    // 倒立实像
+    opt.drawImageCandle(v, -imgH, false);
+    opt.drawLabel(v, -imgH, '像', TH.img);
+
+    // 光线：烛顶 → 小孔 → 像顶
+    opt.drawRay(-u, H, 0, 0, TH.ray3);
+    opt.drawRay(0, 0, v, -imgH, TH.ray3);
+    // 烛底 → 小孔 → 像底
+    opt.drawRay(-u, 0, 0, 0, TH.ray3);
+    opt.drawRay(0, 0, v, 0, TH.ray3);
+
+    document.getElementById('uVal').textContent = u.toFixed(1);
+    document.getElementById('vVal').textContent = v.toFixed(1);
+    document.getElementById('hVal').textContent = H.toFixed(1);
+    document.getElementById('uRange').value = u;
+    document.getElementById('vRange').value = v;
+    document.getElementById('hRange').value = H;
+
+    document.getElementById('readout').innerHTML =
+      '物高 H = <b>' + H.toFixed(1) + '</b> cm<br>' +
+      '像高 h = <b>' + imgH.toFixed(1) + '</b> cm<br>' +
+      'h / H = v / u = <b>' + (v/u).toFixed(2) + '</b><br>' +
+      '成像性质：<b>倒立、实像</b>';
+  }
+
+  function startDrag(e) {
+    var rect = canvas.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    var w = opt.toWorld(t.clientX - rect.left, t.clientY - rect.top);
+    if (Math.abs(w[0] - (-u)) < 10 && w[1] > -5) dragging = 'obj';
+    else if (Math.abs(w[0] - v) < 8) dragging = 'screen';
+  }
+  function moveDrag(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    var rect = canvas.getBoundingClientRect();
+    var t = e.touches ? e.touches[0] : e;
+    var w = opt.toWorld(t.clientX - rect.left, 0);
+    if (dragging === 'obj') u = Math.max(5, Math.min(60, -w[0]));
+    else if (dragging === 'screen') v = Math.max(5, Math.min(60, w[0]));
+    draw();
+  }
+  function endDrag() { dragging = null; }
+
+  canvas.addEventListener('mousedown', startDrag);
+  canvas.addEventListener('mousemove', moveDrag);
+  canvas.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('mouseleave', endDrag);
+  canvas.addEventListener('touchstart', startDrag, { passive: false });
+  canvas.addEventListener('touchmove', moveDrag, { passive: false });
+  canvas.addEventListener('touchend', endDrag);
+
+  document.getElementById('uRange').addEventListener('input', function(e) { u = parseFloat(e.target.value); draw(); });
+  document.getElementById('vRange').addEventListener('input', function(e) { v = parseFloat(e.target.value); draw(); });
+  document.getElementById('hRange').addEventListener('input', function(e) { H = parseFloat(e.target.value); draw(); });
+  document.getElementById('speedRange').addEventListener('input', function(e) {
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    u = 25; v = 20; H = 10; playDir = 1;
+    document.getElementById('playScreen').checked = true;
+    document.getElementById('speedRange').value = 1;
+    document.getElementById('speedVal').textContent = '1.0';
+    stopPlay(); draw();
+  });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var mode = document.getElementById('playDir').value;
+    var spd = parseFloat(document.getElementById('speedRange').value) * 0.4;
+    var dir = mode === 'away' ? 1 : mode === 'toward' ? -1 : playDir;
+    v += dir * spd;
+    if (v > 60) { v = 60; if (mode === 'pingpong') playDir = -1; }
+    if (v < 5)  { v = 5;  if (mode === 'pingpong') playDir = 1; }
+    v = Math.round(v * 10) / 10;
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function() {
+    if (playing) stopPlay();
+    else {
+      playing = true; playDir = 1;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function() { opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
