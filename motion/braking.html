@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>刹车问题 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>刹车问题</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>阶段</th><th>距离</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>反应距离</td><td>s₁ = v₀ · t反应</td></tr>
+      <tr class="active"><td>刹车距离</td><td>s₂ = v₀² / (2a)</td></tr>
+      <tr class="active"><td>停车距离</td><td>s = s₁ + s₂</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>初速度 v₀ = <span id="v0Val">15.0</span> m/s（≈<span id="v0Kmh">54</span> km/h）
+    <input type="range" id="v0Range" min="5" max="40" value="15" step="0.5">
+  </label>
+  <label>反应时间 t反应 = <span id="tRVal">0.8</span> s
+    <input type="range" id="tRRange" min="0.2" max="2" value="0.8" step="0.1">
+  </label>
+  <label>刹车加速度 a = <span id="aVal">5.0</span> m/s²
+    <input type="range" id="aRange" min="2" max="12" value="5" step="0.5">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="3" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">车看到障碍物后先反应、再刹车，两段距离叠加</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var v0 = 15;
+  var tReaction = 0.8;
+  var a = 5;
+  var t = 0;
+  var playing = false, rafId = null;
+
+  function s1() { return v0 * tReaction; }
+  function s2() { return v0 * v0 / (2 * a); }
+  function sTotal() { return s1() + s2(); }
+  function tBrake() { return v0 / a; }
+  function tTotal() { return tReaction + tBrake(); }
+
+  function currentS(tt) {
+    if (tt <= tReaction) {
+      return v0 * tt;
+    }
+    var tb = tt - tReaction;
+    return s1() + v0 * tb - 0.5 * a * tb * tb;
+  }
+  function currentV(tt) {
+    if (tt <= tReaction) return v0;
+    var tb = tt - tReaction;
+    return Math.max(0, v0 - a * tb);
+  }
+
+  function draw() {
+    var ctx = opt.ctx;
+    var W = opt.W, H = opt.H;
+    opt.clear();
+
+    // 场景
+    var totalS = sTotal();
+    var sceneS = totalS * 1.2;
+    var roadY = H * 0.5;
+    var pxPerM = (W - 120) / sceneS;
+    var startX = 60;
+
+    // 路面
+    ctx.save();
+    ctx.fillStyle = '#34495e';
+    ctx.fillRect(0, roadY, W, 50);
+    // 中线
+    ctx.strokeStyle = '#f1c40f';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([12, 12]);
+    ctx.beginPath();
+    ctx.moveTo(0, roadY + 25);
+    ctx.lineTo(W, roadY + 25);
+    ctx.stroke();
+    ctx.restore();
+
+    // 障碍物（终点）
+    var obstacleX = startX + totalS * pxPerM;
+    ctx.save();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(obstacleX - 4, roadY - 60, 8, 60);
+    // 三角警告牌
+    ctx.beginPath();
+    ctx.moveTo(obstacleX, roadY - 90);
+    ctx.lineTo(obstacleX + 20, roadY - 60);
+    ctx.lineTo(obstacleX - 20, roadY - 60);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('!', obstacleX, roadY - 68);
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('障碍物', obstacleX, roadY - 100);
+    ctx.restore();
+
+    // 两段区域标注
+    var reactPx = s1() * pxPerM;
+    var brakePx = s2() * pxPerM;
+    ctx.save();
+    // 反应距离区（浅绿）
+    ctx.fillStyle = 'rgba(39,174,96,0.25)';
+    ctx.fillRect(startX, roadY + 55, reactPx, 20);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('反应距离 s₁ = ' + s1().toFixed(1) + ' m', startX + reactPx / 2, roadY + 70);
+    // 刹车距离区（浅橙）
+    ctx.fillStyle = 'rgba(230,126,34,0.30)';
+    ctx.fillRect(startX + reactPx, roadY + 55, brakePx, 20);
+    ctx.fillStyle = '#d35400';
+    ctx.fillText('刹车距离 s₂ = ' + s2().toFixed(1) + ' m', startX + reactPx + brakePx / 2, roadY + 70);
+    ctx.restore();
+
+    // 起点与终点标注
+    ctx.save();
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('起点', startX, roadY - 8);
+    ctx.fillText('停止', startX + totalS * pxPerM, roadY - 8);
+    ctx.restore();
+
+    // 小车位置
+    var carS = currentS(t);
+    var carX = startX + carS * pxPerM - 25;
+    var carY = roadY - 30;
+
+    // 小车
+    ctx.save();
+    var grad = ctx.createLinearGradient(carX, 0, carX + 50, 0);
+    grad.addColorStop(0, '#3498db');
+    grad.addColorStop(1, '#2980b9');
+    ctx.fillStyle = grad;
+    ctx.fillRect(carX, carY, 50, 26);
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(carX, carY, 50, 26);
+    // 车顶
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(carX + 10, carY - 12, 30, 12);
+    // 车轮
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath();
+    ctx.arc(carX + 12, carY + 26, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(carX + 38, carY + 26, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 速度箭头
+    var cv = currentV(t);
+    if (cv > 0.2) {
+      ctx.save();
+      ctx.strokeStyle = '#27ae60';
+      ctx.lineWidth = 3;
+      var arrowLen = Math.min(70, cv * 3);
+      ctx.beginPath();
+      ctx.moveTo(carX + 50, carY + 13);
+      ctx.lineTo(carX + 50 + arrowLen, carY + 13);
+      ctx.stroke();
+      ctx.fillStyle = '#27ae60';
+      ctx.beginPath();
+      ctx.moveTo(carX + 50 + arrowLen, carY + 13);
+      ctx.lineTo(carX + 50 + arrowLen - 10, carY + 6);
+      ctx.lineTo(carX + 50 + arrowLen - 10, carY + 20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#27ae60';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('v=' + cv.toFixed(1) + ' m/s', carX + 50 + 6, carY - 4);
+      ctx.restore();
+    }
+
+    // 阶段标签
+    ctx.save();
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    if (t <= tReaction) {
+      ctx.fillStyle = '#27ae60';
+      ctx.fillText('反应阶段（匀速）', W / 2, 40);
+    } else if (t < tTotal()) {
+      ctx.fillStyle = '#d35400';
+      ctx.fillText('刹车阶段（匀减速）', W / 2, 40);
+    } else {
+      ctx.fillStyle = '#2c3e50';
+      ctx.fillText('已停下', W / 2, 40);
+    }
+    ctx.restore();
+
+    // 侧栏
+    document.getElementById('v0Val').textContent = v0.toFixed(1);
+    document.getElementById('v0Kmh').textContent = (v0 * 3.6).toFixed(0);
+    document.getElementById('tRVal').textContent = tReaction.toFixed(1);
+    document.getElementById('aVal').textContent = a.toFixed(1);
+    document.getElementById('v0Range').value = v0;
+    document.getElementById('tRRange').value = tReaction;
+    document.getElementById('aRange').value = a;
+
+    var stopped = t >= tTotal();
+    document.getElementById('readout').innerHTML =
+      '当前时间 t = <b>' + t.toFixed(2) + '</b> s<br>' +
+      '当前速度 v = <b>' + cv.toFixed(2) + '</b> m/s<br>' +
+      '已行驶 = <b>' + carS.toFixed(2) + '</b> m<br>' +
+      '反应距离 s₁ = <b>' + s1().toFixed(2) + '</b> m<br>' +
+      '刹车距离 s₂ = <b>' + s2().toFixed(2) + '</b> m<br>' +
+      '停车距离 = <b>' + sTotal().toFixed(2) + '</b> m<br>' +
+      (stopped ? '<b style="color:#27ae60">✓ 已停止</b>' : '<span style="color:#e67e22">行驶中…</span>');
+  }
+
+  document.getElementById('v0Range').addEventListener('input', function(e){ v0 = parseFloat(e.target.value); t = 0; stopPlay(); draw(); });
+  document.getElementById('tRRange').addEventListener('input', function(e){ tReaction = parseFloat(e.target.value); t = 0; stopPlay(); draw(); });
+  document.getElementById('aRange').addEventListener('input', function(e){ a = parseFloat(e.target.value); t = 0; stopPlay(); draw(); });
+  document.getElementById('speedRange').addEventListener('input', function(e){
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){ t = 0; stopPlay(); draw(); });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var spd = parseFloat(document.getElementById('speedRange').value);
+    t += 0.02 * spd;
+    draw();
+    if (t > tTotal() + 0.5) { stopPlay(); return; }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (playing) stopPlay();
+    else {
+      if (t >= tTotal()) t = 0;
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
