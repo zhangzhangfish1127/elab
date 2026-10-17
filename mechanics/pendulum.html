@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单摆 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>单摆</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>位置</th><th>Ep / Ek</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>最高点</td><td>Ep 最大，Ek = 0</td></tr>
+      <tr class="active"><td>最低点</td><td>Ep = 0，Ek 最大</td></tr>
+      <tr class="active"><td>任意位置</td><td>Ep + Ek 恒定</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>摆长 L = <span id="LVal">1.50</span> m
+    <input type="range" id="LRange" min="0.5" max="2.5" value="1.5" step="0.05">
+  </label>
+  <label>初始角度 θ₀ = <span id="a0Val">30</span>°
+    <input type="range" id="a0Range" min="5" max="60" value="30" step="1">
+  </label>
+  <label>重力加速度 g = <span id="gVal">9.8</span> m/s²
+    <input type="range" id="gRange" min="1.6" max="15" value="9.8" step="0.1">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="3" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">观察摆球在高低点之间来回，动能势能相互转换</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var L = 1.5, theta0 = 30, g = 9.8;
+  var t = 0, playing = false, rafId = null;
+  var m = 1;
+
+  function getState() {
+    var omega = Math.sqrt(g / L);
+    var th0 = theta0 * Math.PI / 180;
+    var th = th0 * Math.cos(omega * t);
+    var dth = -th0 * omega * Math.sin(omega * t);
+    var v = L * Math.abs(dth);          // 切向速度
+    var h = L * (1 - Math.cos(th));     // 相对最低点高度
+    var Ep = m * g * h;
+    var Ek = 0.5 * m * v * v;
+    return { th: th, v: v, Ep: Ep, Ek: Ek, total: m * g * L * (1 - Math.cos(th0)) };
+  }
+
+  function draw() {
+    var ctx = opt.ctx;
+    var W = opt.W, H = opt.H;
+    opt.clear();
+    var s = getState();
+
+    // 支点位置
+    var pivotX = W * 0.35;
+    var pivotY = 60;
+    var scale = Math.min((H - 140) / L, (W * 0.5) / L) * 0.85;
+
+    // 天花板
+    ctx.save();
+    ctx.strokeStyle = '#7f8c8d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pivotX - 60, pivotY);
+    ctx.lineTo(pivotX + 60, pivotY);
+    ctx.stroke();
+    ctx.restore();
+
+    // 摆动范围虚线（弧）
+    var th0 = theta0 * Math.PI / 180;
+    var lowestY = pivotY + L * scale;
+    ctx.save();
+    ctx.strokeStyle = '#ddd';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(pivotX, pivotY, L * scale, Math.PI / 2 - th0, Math.PI / 2 + th0);
+    ctx.stroke();
+    ctx.restore();
+
+    // 最低点水平线
+    ctx.save();
+    ctx.strokeStyle = '#e8ecef';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pivotX - 30, lowestY);
+    ctx.lineTo(pivotX + 30, lowestY);
+    ctx.stroke();
+    ctx.restore();
+
+    // 摆球位置
+    var bx = pivotX + L * scale * Math.sin(s.th);
+    var by = pivotY + L * scale * Math.cos(s.th);
+
+    // 摆线
+    ctx.save();
+    ctx.strokeStyle = '#34495e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pivotX, pivotY);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.restore();
+
+    // 支点
+    ctx.save();
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath();
+    ctx.arc(pivotX, pivotY, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 高度标记（虚线水平线）
+    ctx.save();
+    ctx.strokeStyle = '#3498db';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(pivotX - 100, by);
+    ctx.stroke();
+    ctx.restore();
+
+    // 摆球
+    ctx.save();
+    var grad = ctx.createRadialGradient(bx - 4, by - 4, 2, bx, by, 16);
+    grad.addColorStop(0, '#f39c12');
+    grad.addColorStop(1, '#c0392b');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(bx, by, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // 高度标签
+    ctx.save();
+    ctx.fillStyle = '#3498db';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('h', pivotX - 90, by - 4);
+    ctx.restore();
+
+    // 速度箭头（切向）
+    if (s.v > 0.05) {
+      var sign = -Math.sin(Math.sqrt(g / L) * t) * Math.cos(s.th) * 1;
+      var tangentX = Math.cos(s.th) * (sign > 0 ? 1 : -1);
+      var tangentY = -Math.sin(s.th) * (sign > 0 ? 1 : -1);
+      var arrowLen = Math.min(50, s.v * 15);
+      ctx.save();
+      ctx.strokeStyle = '#27ae60';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + tangentX * arrowLen, by + tangentY * arrowLen);
+      ctx.stroke();
+      ctx.fillStyle = '#27ae60';
+      ctx.beginPath();
+      ctx.arc(bx + tangentX * arrowLen, by + tangentY * arrowLen, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 右侧能量条
+    var rx = W * 0.68;
+    var barW = 60;
+    var barH = H - 140;
+    var barTop = 80;
+
+    ctx.save();
+    ctx.fillStyle = '#fafbfc';
+    ctx.strokeStyle = '#ddd';
+    ctx.fillRect(rx - 10, barTop - 20, barW * 2 + 40, barH + 50);
+    ctx.strokeRect(rx - 10, barTop - 20, barW * 2 + 40, barH + 50);
+    ctx.restore();
+
+    var EpFrac = s.total > 0 ? s.Ep / s.total : 0;
+    var EkFrac = s.total > 0 ? s.Ek / s.total : 0;
+
+    // Ep
+    ctx.save();
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(rx, barTop + barH * (1 - EpFrac), barW, barH * EpFrac);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rx, barTop + barH * (1 - EpFrac), barW, barH * EpFrac);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('重力势能', rx + barW / 2, barTop - 4);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText(s.Ep.toFixed(2) + ' J', rx + barW / 2, barTop + barH + 22);
+    ctx.restore();
+
+    // Ek
+    ctx.save();
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(rx + barW + 20, barTop + barH * (1 - EkFrac), barW, barH * EkFrac);
+    ctx.strokeStyle = '#d35400';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rx + barW + 20, barTop + barH * (1 - EkFrac), barW, barH * EkFrac);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('动能', rx + barW + 20 + barW / 2, barTop - 4);
+    ctx.fillStyle = '#d35400';
+    ctx.fillText(s.Ek.toFixed(2) + ' J', rx + barW + 20 + barW / 2, barTop + barH + 22);
+    ctx.restore();
+
+    // 总能量
+    ctx.save();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('总机械能 = ' + s.total.toFixed(2) + ' J', W / 2, H - 20);
+    ctx.restore();
+
+    // 侧栏
+    document.getElementById('LVal').textContent = L.toFixed(2);
+    document.getElementById('a0Val').textContent = theta0;
+    document.getElementById('gVal').textContent = g.toFixed(1);
+    document.getElementById('LRange').value = L;
+    document.getElementById('a0Range').value = theta0;
+    document.getElementById('gRange').value = g;
+
+    document.getElementById('readout').innerHTML =
+      '当前角度 θ = <b>' + (s.th * 180 / Math.PI).toFixed(1) + '°</b><br>' +
+      '切向速度 v = <b>' + s.v.toFixed(2) + '</b> m/s<br>' +
+      'Ep = <b>' + s.Ep.toFixed(3) + '</b> J<br>' +
+      'Ek = <b>' + s.Ek.toFixed(3) + '</b> J<br>' +
+      '周期 T = <b>' + (2 * Math.PI * Math.sqrt(L / g)).toFixed(2) + '</b> s';
+  }
+
+  document.getElementById('LRange').addEventListener('input', function(e){ L = parseFloat(e.target.value); t = 0; draw(); });
+  document.getElementById('a0Range').addEventListener('input', function(e){ theta0 = parseFloat(e.target.value); t = 0; draw(); });
+  document.getElementById('gRange').addEventListener('input', function(e){ g = parseFloat(e.target.value); t = 0; draw(); });
+  document.getElementById('speedRange').addEventListener('input', function(e){
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){ t = 0; stopPlay(); draw(); });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var spd = parseFloat(document.getElementById('speedRange').value);
+    t += 0.02 * spd;
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (playing) stopPlay();
+    else {
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
