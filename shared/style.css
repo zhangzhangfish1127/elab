@@ -1,0 +1,111 @@
+/* 全局平滑滚动 */
+html { 
+  scroll-behavior: smooth; 
+}
+
+/* 全局基础设置 */
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  margin: 0; padding: 20px;
+  background: #f5f7fa; color: #2c3e50;
+}
+h1 { text-align: center; }
+
+/* 返回主页按钮 */
+.back {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; background: #fff;
+  border: 1px solid #e6eaee; border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  color: #3498db; text-decoration: none;
+  font-size: 14px; font-weight: 500;
+  margin-bottom: 16px; transition: all 0.2s;
+}
+.back:hover {
+  background: #3498db; border-color: #3498db;
+  color: #fff; box-shadow: 0 4px 12px rgba(52,152,219,0.35);
+}
+
+/* 主页布局 */
+.layout { display: flex; gap: 20px; max-width: 1100px; margin: 0 auto; align-items: flex-start; }
+.sidebar { width: 180px; flex-shrink: 0; background: #fff; border-radius: 12px; padding: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); position: sticky; top: 16px; }
+.sidebar-item { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; font-size: 14px; color: #555; cursor: pointer; user-select: none; transition: background 0.15s; }
+.sidebar-item:hover { background: #f0f6fc; }
+.sidebar-item.active { background: #e8f2fb; color: #3498db; font-weight: 600; }
+.sidebar-group-title { font-size: 12px; color: #999; padding: 12px 10px 6px; letter-spacing: 1px; }
+
+.content { flex: 1; min-width: 0; }
+.category { margin-bottom: 28px; }
+.category h2 { color: #3498db; border-left: 4px solid #3498db; padding-left: 12px; font-size: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-decoration: none; color: #333; transition: transform 0.2s, box-shadow 0.2s; }
+.card:hover { transform: translateY(-4px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+.card h3 { margin: 0 0 8px; color: #2c3e50; font-size: 16px; }
+.card p { margin: 0; font-size: 13px; color: #777; }
+
+/* 实验页布局 */
+.lab { display: flex; gap: 16px; max-width: 1200px; margin: 0 auto; align-items: flex-start; }
+.lab-main { flex: 1; min-width: 0; }
+.lab-side { width: 300px; flex-shrink: 0; background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.lab-side h3 { margin: 0 0 12px; font-size: 15px; color: #2c3e50; }
+.lab-side label { display: block; font-size: 14px; margin-bottom: 14px; }
+.lab-side input[type=range] { width: 100%; margin-top: 4px; }
+.lab-side .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; }
+.lab-side .row input[type=checkbox] { width: 18px; height: 18px; }
+.lab-side .row select { flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid #ccc; background: #fff; font-size: 13px; }
+.lab-side button { width: 100%; padding: 8px; border-radius: 8px; border: none; background: #3498db; color: #fff; font-size: 14px; cursor: pointer; margin-bottom: 8px; }
+.lab-side button.secondary { background: #ecf0f1; color: #2c3e50; }
+
+/* 表格 */
+.case-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 16px; }
+.case-table th, .case-table td { border: 1px solid #e6eaee; padding: 6px; text-align: left; }
+.case-table th { background: #f4f7fa; color: #2c3e50; font-weight: 600; }
+.case-table tr.active { background: #fff5d1; outline: 2px solid #f1c40f; outline-offset: -2px; }
+.case-table tr.active td { font-weight: 600; color: #b9770e; }
+.case-table tr.disabled td { color: #ccc; }
+
+/* 读数面板 */
+.readout { font-size: 13px; color: #555; line-height: 1.8; background: #f8f9fb; border-radius: 8px; padding: 10px 12px; margin-top: 6px; }
+.readout b { color: #e74c3c; }
+
+/* 画布与图例 */
+.stage { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 16px; margin: 0 auto; }
+canvas { display: block; width: 100%; height: auto; touch-action: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 12px; font-size: 13px; color: #555; }
+.legend span::before { content: ''; display: inline-block; width: 20px; height: 3px; margin-right: 4px; vertical-align: middle; background: var(--c, #999); }
+.hint { text-align: center; font-size: 13px; color: #999; margin-top: 8px; }
+
+/* 页脚 */
+.site-footer { text-align: center; color: #999; font-size: 13px; margin-top: 40px; padding: 20px 0; border-top: 1px solid #eee; }
+.site-footer a { color: #3498db; text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
+
+/* 建设中/404占位 */
+.construction { max-width: 900px; margin: 80px auto; text-align: center; color: #999; }
+.construction .icon { font-size: 48px; }
+.construction h2 { color: #2c3e50; }
+
+/* 顶部栏 (色盲模式) */
+.lab-topbar { position: fixed; top: 12px; right: 12px; background: #fff; border-radius: 10px; padding: 6px 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.10); font-size: 13px; z-index: 1000; display: flex; gap: 10px; align-items: center; }
+.lab-topbar label { display: flex; align-items: center; gap: 4px; color: #666; font-size: 13px; }
+.lab-topbar select { padding: 3px 6px; border-radius: 6px; border: 1px solid #ccc; background: #fff; font-size: 13px; }
+
+/* 响应式适配 */
+@media (max-width: 820px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; position: static; display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding: 8px; }
+  .sidebar-item { white-space: nowrap; flex-shrink: 0; }
+  .sidebar-group-title { display: none; }
+  .lab { flex-direction: column; }
+  .lab-side { width: 100%; }
+  h1 { margin-top: 52px; font-size: 22px; }
+  .lab-topbar { top: 6px; right: 6px; padding: 4px 8px; font-size: 12px; gap: 6px; }
+  .lab-topbar select { font-size: 12px; padding: 2px 4px; }
+  .lab-topbar label { font-size: 12px; }
+}
+
+/* RTL (从右到左) 适配 */
+[dir="rtl"] .lab { flex-direction: row-reverse; }
+[dir="rtl"] .layout { flex-direction: row-reverse; }
+[dir="rtl"] .case-table th, [dir="rtl"] .case-table td { text-align: right; }
