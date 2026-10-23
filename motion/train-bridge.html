@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>火车过桥 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>火车过桥</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>阶段</th><th>路程</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>车头上桥</td><td>车头到桥头</td></tr>
+      <tr class="active"><td>完全通过</td><td>桥长 + 车长</td></tr>
+      <tr class="active"><td>时间</td><td>t = (L桥 + L车) / v</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>车速 v = <span id="vVal">10.0</span> m/s
+    <input type="range" id="vRange" min="2" max="30" value="10" step="0.5">
+  </label>
+  <label>车长 L车 = <span id="ltVal">80</span> m
+    <input type="range" id="ltRange" min="20" max="200" value="80" step="5">
+  </label>
+  <label>桥长 L桥 = <span id="lbVal">200</span> m
+    <input type="range" id="lbRange" min="50" max="500" value="200" step="10">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="3" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">点播放看火车从车头上桥到车尾离桥的全过程</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var v = 10;
+  var Ltrain = 80, Lbridge = 200;
+  var t = 0;
+  var playing = false, rafId = null;
+
+  function totalTime() {
+    return (Ltrain + Lbridge) / v;
+  }
+
+  function draw() {
+    var ctx = opt.ctx;
+    var W = opt.W, H = opt.H;
+    opt.clear();
+
+    // 场景宽度（米）→ 像素
+    var totalDist = Lbridge + Ltrain * 3;   // 视野范围
+    var sceneL = -Ltrain, sceneR = Lbridge + Ltrain * 2;
+    var sceneW = sceneR - sceneL;
+    var pxPerM = W / sceneW;
+    function toPx(m) { return (m - sceneL) * pxPerM; }
+
+    // 桥面 y
+    var groundY = H * 0.7;
+    var bridgeY = groundY - 8;
+
+    // 河 / 地面
+    ctx.save();
+    ctx.fillStyle = 'rgba(174,214,241,0.4)';
+    ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.restore();
+
+    // 桥
+    ctx.save();
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillRect(toPx(0), bridgeY, Lbridge * pxPerM, 12);
+    // 桥墩
+    ctx.fillStyle = '#5d6d7e';
+    for (var i = 0; i <= 4; i++) {
+      var bx = toPx(i * Lbridge / 4);
+      ctx.fillRect(bx - 3, bridgeY + 12, 6, groundY - bridgeY + 30);
+    }
+    // 桥头桥尾标记
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(toPx(0), bridgeY - 30);
+    ctx.lineTo(toPx(0), bridgeY + 50);
+    ctx.moveTo(toPx(Lbridge), bridgeY - 30);
+    ctx.lineTo(toPx(Lbridge), bridgeY + 50);
+    ctx.stroke();
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('桥头', toPx(0), bridgeY - 36);
+    ctx.fillText('桥尾', toPx(Lbridge), bridgeY - 36);
+    ctx.fillText('桥长 ' + Lbridge + 'm', toPx(Lbridge / 2), bridgeY - 36);
+    ctx.restore();
+
+    // 火车位置
+    var headX = v * t;            // 车头位置
+    var tailX = headX - Ltrain;   // 车尾位置
+
+    // 铁轨
+    ctx.save();
+    ctx.strokeStyle = '#95a5a6';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, bridgeY);
+    ctx.lineTo(W, bridgeY);
+    ctx.stroke();
+    ctx.restore();
+
+    // 火车（车头 + 车身 + 车尾）
+    var headPx = toPx(headX);
+    var tailPx = toPx(tailX);
+    var trainH = 30;
+    ctx.save();
+    // 车身
+    var grad = ctx.createLinearGradient(tailPx, 0, headPx, 0);
+    grad.addColorStop(0, '#c0392b');
+    grad.addColorStop(1, '#e74c3c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(tailPx, bridgeY - trainH, headPx - tailPx, trainH);
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tailPx, bridgeY - trainH, headPx - tailPx, trainH);
+    // 窗户
+    ctx.fillStyle = '#f1c40f';
+    var windowCount = Math.max(3, Math.floor(Ltrain / 15));
+    for (var k = 0; k < windowCount; k++) {
+      var wxp = tailPx + (headPx - tailPx) * (k + 0.5) / windowCount;
+      ctx.fillRect(wxp - 4, bridgeY - trainH + 6, 8, 10);
+    }
+    // 车头标记
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(headPx - 4, bridgeY - trainH - 6, 8, 8);
+    // 车尾标记
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(tailPx - 4, bridgeY - trainH - 6, 8, 8);
+    ctx.restore();
+
+    // 车头 / 车尾标注
+    ctx.save();
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('车头', headPx, bridgeY - trainH - 12);
+    ctx.fillText('车尾', tailPx, bridgeY - trainH - 12);
+    ctx.restore();
+
+    // 进度条
+    var progY = H - 50;
+    var progW = W - 60;
+    var progX = 30;
+    ctx.save();
+    ctx.fillStyle = '#f0f3f5';
+    ctx.fillRect(progX, progY, progW, 20);
+    var prog = Math.min(1, t / totalTime());
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(progX, progY, progW * prog, 20);
+    ctx.strokeStyle = '#95a5a6';
+    ctx.strokeRect(progX, progY, progW, 20);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('进度 ' + (prog * 100).toFixed(0) + '%', W / 2, progY + 15);
+    ctx.restore();
+
+    // 侧栏读数
+    document.getElementById('vVal').textContent = v.toFixed(1);
+    document.getElementById('ltVal').textContent = Ltrain;
+    document.getElementById('lbVal').textContent = Lbridge;
+    document.getElementById('vRange').value = v;
+    document.getElementById('ltRange').value = Ltrain;
+    document.getElementById('lbRange').value = Lbridge;
+
+    var tt = totalTime();
+    var passed = t >= tt;
+    var status = passed ? '<b style="color:#27ae60">✓ 已完全通过</b>'
+               : t < Ltrain / v ? '<b style="color:#e67e22">车头上桥中</b>'
+               : '<b style="color:#3498db">完全在桥上</b>';
+
+    document.getElementById('readout').innerHTML =
+      '车头位置 x = <b>' + headX.toFixed(1) + '</b> m<br>' +
+      '车尾位置 x = <b>' + tailX.toFixed(1) + '</b> m<br>' +
+      '已用时间 t = <b>' + t.toFixed(2) + '</b> s<br>' +
+      '完全通过时间 T = <b>' + tt.toFixed(2) + '</b> s<br>' +
+      '路程 = 桥长 + 车长 = <b>' + (Lbridge + Ltrain) + '</b> m<br>' +
+      status;
+  }
+
+  document.getElementById('vRange').addEventListener('input', function(e){ v = parseFloat(e.target.value); t = 0; stopPlay(); draw(); });
+  document.getElementById('ltRange').addEventListener('input', function(e){ Ltrain = parseFloat(e.target.value); t = 0; stopPlay(); draw(); });
+  document.getElementById('lbRange').addEventListener('input', function(e){ Lbridge = parseFloat(e.target.value); t = 0; stopPlay(); draw(); });
+  document.getElementById('speedRange').addEventListener('input', function(e){
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){ t = 0; stopPlay(); draw(); });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var spd = parseFloat(document.getElementById('speedRange').value);
+    t += 0.05 * spd;
+    draw();
+    if (t > totalTime() + 1) { stopPlay(); return; }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (playing) stopPlay();
+    else {
+      if (t >= totalTime()) t = 0;
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
