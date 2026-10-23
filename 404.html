@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 - 页面走丢了 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="/shared/style.css">
+<style>
+  .error-page {
+    max-width: 600px; margin: 100px auto; text-align: center;
+    background: #fff; padding: 50px 30px; border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  }
+  .error-icon { font-size: 80px; margin-bottom: 10px; }
+  .error-page h1 { color: #2c3e50; margin: 0 0 10px; font-size: 28px; }
+  .error-page p { color: #7f8c8d; font-size: 15px; margin-bottom: 30px; }
+  .btn-home {
+    display: inline-block; padding: 10px 24px; background: #3498db;
+    color: #fff; text-decoration: none; border-radius: 8px;
+    font-size: 15px; font-weight: 500; transition: 0.2s;
+  }
+  .btn-home:hover { background: #2980b9; transform: translateY(-2px); }
+</style>
+</head>
+<body>
+  <div class="error-page">
+    <div class="error-icon">🔭</div>
+    <h1>404 - 实验跑丢了</h1>
+    <p>你访问的页面可能尚未完成，或者网址打错了。</p>
+    <a class="back" href="/index.html" style="margin-bottom:20px;">← 返回主页</a>
+    <br><br>
+
+  </div>
+  <script src="/shared/common.js"></script>
+  <script>if(window.App) App.injectTopbar();</script>
+</body>
+</html>
