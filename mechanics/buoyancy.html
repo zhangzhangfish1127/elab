@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>浮力 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>浮力</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>状态</th><th>受力关系</th></tr></thead>
+    <tbody>
+      <tr data-case="float"><td>漂浮</td><td>F浮 = G物 (部分浸入)</td></tr>
+      <tr data-case="suspend"><td>悬浮</td><td>F浮 = G物 (全部浸入)</td></tr>
+      <tr data-case="sink"><td>下沉</td><td>F浮 < G物 (沉底)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>物体密度 ρ物 = <span id="rhoVal">0.8</span> g/cm³
+    <input type="range" id="rhoRange" min="0.2" max="2.5" value="0.8" step="0.1">
+  </label>
+  <label>物体体积 V = <span id="volVal">100</span> cm³
+    <input type="range" id="volRange" min="20" max="200" value="100" step="10">
+  </label>
+  <div style="font-size:13px;color:#666;margin-top:8px;">液体：水（ρ液 = 1.0 g/cm³）</div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">手动模拟</div>
+  <label>将物体向下压入水中：
+    <input type="range" id="forceDepth" min="0" max="100" value="0" step="1">
+  </label>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">调节密度或向下压物体，观察浮力与重力的大小关系</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var rhoObj = 0.8; // g/cm³
+  var V = 100;      // cm³
+  var rhoLiq = 1.0; // g/cm³
+  var g = 9.8;
+  var forceDepth = 0; // 0~100
+
+  function draw() {
+    var ctx = opt.ctx, W = opt.W, H = opt.H;
+    opt.clear();
+
+    var G = rhoObj * V / 1000 * g; // N
+    var Fmax = rhoLiq * V / 1000 * g; // N
+
+    var subRatio; // 浸入比例
+    if (forceDepth > 0) {
+      subRatio = Math.min(1, forceDepth / 100);
+    } else {
+      if (rhoObj < rhoLiq) subRatio = rhoObj / rhoLiq;
+      else subRatio = 1;
+    }
+
+    var F = rhoLiq * (V * subRatio) / 1000 * g; // 实际浮力
+
+    var state;
+    if (subRatio < 1) state = 'float';
+    else if (Math.abs(G - F) < 0.01) state = 'suspend';
+    else if (F < G) state = 'sink';
+    else state = 'forced';
+
+    var waterY = H * 0.45;
+    var centerX = W / 2;
+    var boxSize = Math.sqrt(V) * 1.5;
+
+    // 画水
+    ctx.save();
+    ctx.fillStyle = 'rgba(52,152,219,0.3)';
+    ctx.fillRect(0, waterY, W, H - waterY);
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, waterY); ctx.lineTo(W, waterY); ctx.stroke();
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('水 (ρ = 1.0 g/cm³)', 20, waterY + 25);
+    ctx.restore();
+
+    // 计算物体位置
+    var boxY;
+    if (subRatio === 0) boxY = waterY - boxSize;
+    else if (subRatio >= 1) {
+      boxY = waterY - boxSize / 2;
+      if (state === 'sink' || state === 'forced') {
+        if (state === 'sink' && forceDepth === 0) boxY = H - 40 - boxSize;
+      }
+    } else {
+      boxY = waterY - boxSize * (1 - subRatio);
+    }
+
+    // 画物体
+    var boxX = centerX - boxSize / 2;
+    ctx.save();
+    ctx.fillStyle = rhoObj < 1 ? '#f39c12' : (rhoObj == 1 ? '#3498db' : '#7f8c8d');
+    ctx.fillRect(boxX, boxY, boxSize, boxSize);
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('物', centerX, boxY + boxSize/2);
+    ctx.restore();
+
+    // 受力箭头
+    var arrowLen = 50;
+    
+    // 重力
+    ctx.save();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(centerX, boxY + boxSize); ctx.lineTo(centerX, boxY + boxSize + arrowLen); ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(centerX, boxY + boxSize + arrowLen);
+    ctx.lineTo(centerX - 6, boxY + boxSize + arrowLen - 10);
+    ctx.lineTo(centerX + 6, boxY + boxSize + arrowLen - 10);
+    ctx.fill();
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('G = ' + G.toFixed(2) + 'N', centerX + 10, boxY + boxSize + arrowLen - 10);
+    ctx.restore();
+
+    // 浮力
+    ctx.save();
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3;
+    var fLen = (F / G) * arrowLen || 0;
+    if (fLen > 0) {
+      ctx.beginPath(); ctx.moveTo(centerX, boxY); ctx.lineTo(centerX, boxY - fLen); ctx.stroke();
+      ctx.fillStyle = '#27ae60';
+      ctx.beginPath();
+      ctx.moveTo(centerX, boxY - fLen);
+      ctx.lineTo(centerX - 6, boxY - fLen + 10);
+      ctx.lineTo(centerX + 6, boxY - fLen + 10);
+      ctx.fill();
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('F浮 = ' + F.toFixed(2) + 'N', centerX + 10, boxY - fLen + 10);
+    }
+    ctx.restore();
+
+    // 表格高亮
+    document.querySelectorAll('#caseTable tbody tr').forEach(function(tr) {
+      tr.classList.toggle('active', tr.dataset.case === state);
+    });
+
+    // 更新侧栏
+    document.getElementById('rhoVal').textContent = rhoObj.toFixed(1);
+    document.getElementById('volVal').textContent = V;
+    document.getElementById('rhoRange').value = rhoObj;
+    document.getElementById('volRange').value = V;
+
+    var stateText = '';
+    if (state === 'float') stateText = '<b style="color:#27ae60">漂浮</b> (F浮 = G)';
+    else if (state === 'suspend') stateText = '<b style="color:#3498db">悬浮</b> (F浮 = G)';
+    else if (state === 'sink') stateText = '<b style="color:#e74c3c">下沉</b> (F浮 < G)';
+    else stateText = '<b style="color:#f39c12">被外力压入水中</b>';
+
+    document.getElementById('readout').innerHTML =
+      '重力 G = <b>' + G.toFixed(2) + '</b> N<br>' +
+      '排开液体体积 V排 = <b>' + (V * subRatio).toFixed(0) + '</b> cm³<br>' +
+      '浮力 F浮 = ρ液 g V排 = <b>' + F.toFixed(2) + '</b> N<br>' +
+      '状态：' + stateText;
+  }
+
+  document.getElementById('rhoRange').addEventListener('input', function(e) {
+    rhoObj = parseFloat(e.target.value); forceDepth = 0; document.getElementById('forceDepth').value = 0; draw();
+  });
+  document.getElementById('volRange').addEventListener('input', function(e) {
+    V = parseFloat(e.target.value); draw();
+  });
+  document.getElementById('forceDepth').addEventListener('input', function(e) {
+    forceDepth = parseFloat(e.target.value); draw();
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
