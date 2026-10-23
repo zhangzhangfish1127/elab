@@ -108,7 +108,7 @@
     ctx.fill();
     ctx.restore();
 
-    // 旋转坐标系画杠杆和砝码
+    // 旋转坐标系画杠杆
     ctx.save();
     ctx.translate(origin[0], origin[1]);
     ctx.rotate(tiltRad);
@@ -130,9 +130,9 @@
     ctx.strokeStyle = TH.ray2;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L2 * opt.scale, 0); ctx.stroke();
 
-    // 在局部坐标系中画砝码（完美贴在杆下方）
-    drawWeightLocal(-L1 * opt.scale, 0, F1, TH.ray1, '₁');
-    drawWeightLocal(L2 * opt.scale, 0, F2, TH.ray2, '₂');
+    // 传入 tiltRad 以便抵消旋转
+    drawWeightLocal(-L1 * opt.scale, 0, F1, TH.ray1, '₁', tiltRad);
+    drawWeightLocal(L2 * opt.scale, 0, F2, TH.ray2, '₂', tiltRad);
 
     ctx.restore();
 
@@ -160,40 +160,43 @@
       stateText;
   }
 
-  // 局部坐标系画砝码
-  function drawWeightLocal(x, y, F, color, label) {
+  // 局部坐标系画砝码及全局向下的力
+  function drawWeightLocal(x, y, F, color, label, tiltRad) {
     var ctx = opt.ctx;
     var w = 8 + F * 1.5;
     var h = 8 + F * 1.5;
     var hangLen = 10;
 
     ctx.save();
-    // 悬挂线
+    // 1. 悬挂线（跟随杠杆旋转）
     ctx.strokeStyle = color; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, 3); ctx.lineTo(x, 3 + hangLen); ctx.stroke();
 
-    // 砝码方块
+    // 2. 砝码方块（跟随杠杆旋转）
     var boxY = 3 + hangLen;
     ctx.fillStyle = color; ctx.globalAlpha = 0.75;
     ctx.fillRect(x - w / 2, boxY, w, h);
     ctx.globalAlpha = 1; ctx.strokeStyle = color; ctx.lineWidth = 2;
     ctx.strokeRect(x - w / 2, boxY, w, h);
 
-    // 力箭头（由于坐标系已旋转，这里画向下的箭头就是垂直于杆的）
+    // 3. 力箭头（抵消旋转变竖直）
+    ctx.translate(x, boxY + h); // 原点移到砝码底部
+    ctx.rotate(-tiltRad);       // 反向旋转，恢复垂直
+
     var arrowLen = 10 + F * 3;
     ctx.strokeStyle = color; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(x, boxY + h); ctx.lineTo(x, boxY + h + arrowLen); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, arrowLen); ctx.stroke();
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(x, boxY + h + arrowLen);
-    ctx.lineTo(x - 5, boxY + h + arrowLen - 10);
-    ctx.lineTo(x + 5, boxY + h + arrowLen - 10);
+    ctx.moveTo(0, arrowLen);
+    ctx.lineTo(-5, arrowLen - 10);
+    ctx.lineTo(5, arrowLen - 10);
     ctx.fill();
 
-    // 文字
+    // 文字标注（保持水平）
     ctx.fillStyle = color; ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText('F' + label + '=' + F.toFixed(1) + 'N', x + w/2 + 5, boxY + h/2);
+    ctx.fillText('F' + label + '=' + F.toFixed(1) + 'N', 10, arrowLen / 2);
     ctx.restore();
   }
 
