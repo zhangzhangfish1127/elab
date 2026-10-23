@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>压强 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>压强</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>关系</th><th>公式</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>压力越大</td><td>压强越大</td></tr>
+      <tr class="active"><td>受力面积越小</td><td>压强越大</td></tr>
+      <tr class="active"><td>定义式</td><td>p = F / S</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>压力 F = <span id="fVal">100</span> N
+    <input type="range" id="fRange" min="10" max="500" value="100" step="10">
+  </label>
+  
+  <label>受力面积 S = <span id="sVal">0.10</span> m²
+    <input type="range" id="sRange" min="0.01" max="1" value="0.1" step="0.01">
+  </label>
+
+  <div class="row">
+    <input type="checkbox" id="playF">
+    <label for="playF" style="margin:0">压力 F 自动变化</label>
+  </div>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">观察砖块平放和竖放时，陷入沙子的深度</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var F = 100, S = 0.1;
+  var playing = false, rafId = null;
+  var dir = 1;
+
+  function draw() {
+    var ctx = opt.ctx, W = opt.W, H = opt.H;
+    opt.clear();
+
+    var p = F / S;
+
+    // 沙子
+    ctx.save();
+    ctx.fillStyle = '#f5deb3';
+    ctx.fillRect(0, H * 0.6, W, H * 0.4);
+    ctx.fillStyle = '#d2b48c';
+    for (var i = 0; i < W; i += 15) {
+      for (var j = H * 0.6; j < H; j += 15) {
+        ctx.beginPath();
+        ctx.arc(i + Math.random()*5, j + Math.random()*5, 1.5, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // 砖块尺寸
+    var boxW = 40 + (S / 1) * 360;
+    var boxH = 60;
+    var centerX = W / 2;
+    var sandY = H * 0.6;
+
+    // 陷入深度
+    var sinkDepth = Math.min(80, (p / 1000) * 30);
+    var boxY = sandY - boxH + sinkDepth;
+
+    // 画砖
+    ctx.save();
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(centerX - boxW/2, boxY, boxW, boxH);
+    ctx.strokeStyle = '#922b21';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(centerX - boxW/2, boxY, boxW, boxH);
+    ctx.fillStyle = '#7b241c';
+    for (var k = 0; k < 3; k++) {
+        ctx.beginPath();
+        ctx.arc(centerX - boxW/3 + k*boxW/3, boxY + boxH/2, 5, 0, Math.PI*2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    // 画压力箭头
+    var arrowLen = Math.min(80, F / 5);
+    ctx.save();
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(centerX, boxY - arrowLen - 10);
+    ctx.lineTo(centerX, boxY - 10);
+    ctx.stroke();
+    ctx.fillStyle = '#2980b9';
+    ctx.beginPath();
+    ctx.moveTo(centerX, boxY - 5);
+    ctx.lineTo(centerX - 10, boxY - 20);
+    ctx.lineTo(centerX + 10, boxY - 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('F = ' + F + ' N', centerX, boxY - arrowLen - 20);
+    ctx.restore();
+
+    // 面积标注
+    ctx.save();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(centerX - boxW/2, boxY + boxH + 15);
+    ctx.lineTo(centerX + boxW/2, boxY + boxH + 15);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.fillText('S = ' + S.toFixed(2) + ' m²', centerX, boxY + boxH + 30);
+    ctx.restore();
+
+    // 侧栏
+    document.getElementById('fVal').textContent = F;
+    document.getElementById('sVal').textContent = S.toFixed(2);
+    document.getElementById('fRange').value = F;
+    document.getElementById('sRange').value = S;
+
+    document.getElementById('readout').innerHTML =
+      '压强 p = F / S<br>' +
+      'p = <b>' + F + '</b> N / <b>' + S.toFixed(2) + '</b> m²<br>' +
+      'p = <b style="color:#e74c3c;font-size:16px;">' + p.toFixed(1) + '</b> Pa<br>' +
+      '<span style="font-size:12px;color:#888">受力面积越小，压强越大，陷入越深</span>';
+  }
+
+  document.getElementById('fRange').addEventListener('input', function(e) { F = parseFloat(e.target.value); draw(); });
+  document.getElementById('sRange').addEventListener('input', function(e) { S = parseFloat(e.target.value); draw(); });
+  
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    F = 100; S = 0.1;
+    document.getElementById('fRange').value = 100;
+    document.getElementById('sRange').value = 0.1;
+    document.getElementById('playF').checked = false;
+    stopPlay(); draw();
+  });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    F += dir * 5;
+    if (F > 400) { F = 400; dir = -1; }
+    if (F < 20) { F = 20; dir = 1; }
+    document.getElementById('fRange').value = F;
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function() {
+    if (playing) stopPlay();
+    else {
+      if (!document.getElementById('playF').checked) { alert('请先勾选"压力F自动变化"'); return; }
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
