@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ijhub · 初中全科动态学堂</title>
+<link rel="stylesheet" href="shared/style.css">
+<style>
+  /* 搜索框 */
+  .search-box {
+    width: 100%; margin-bottom: 20px; padding: 12px 16px;
+    border-radius: 10px; border: 1px solid #ccc; font-size: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05); outline: none;
+    transition: all 0.2s; background: #fff;
+  }
+  .search-box:focus { border-color: #3498db; box-shadow: 0 4px 14px rgba(52,152,219,0.15); }
+
+  /* 域名变更弹窗 */
+  .domain-popup {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #fff; color: #333; padding: 14px 20px;
+    border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 2000; display: none; align-items: center; gap: 16px;
+    border-left: 5px solid #3498db; font-size: 14px;
+    animation: slideUp 0.5s ease-out;
+  }
+  @keyframes slideUp { from { bottom: -100px; opacity: 0; } to { bottom: 20px; opacity: 1; } }
+  .domain-popup a { color: #3498db; font-weight: bold; text-decoration: none; }
+  .domain-popup a:hover { text-decoration: underline; }
+  .domain-popup .close-btn {
+    background: none; border: none; font-size: 22px; color: #999;
+    cursor: pointer; padding: 0 4px; line-height: 1;
+  }
+  .domain-popup .close-btn:hover { color: #e74c3c; }
+
+  /* “制作中” 卡片样式 */
+  .card.wip {
+    opacity: 0.6;
+    position: relative;
+    cursor: not-allowed;
+    background: #f9f9f9;
+    border: 1px dashed #ccc;
+    box-shadow: none;
+  }
+  .card.wip:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .card.wip::after {
+    content: '制作中';
+    position: absolute;
+    top: 10px; right: -5px;
+    background: #f39c12;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px 0 0 10px;
+    box-shadow: -1px 2px 4px rgba(0,0,0,0.1);
+  }
+</style>
+</head>
+<body>
+<h1 style="text-align:center;">ijhub 初中全科动态学堂</h1>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-group-title">综合</div>
+    <div class="sidebar-item active" data-filter="all">全部</div>
+    <div class="sidebar-item" data-filter="recent">最近查看</div>
+    
+    <div class="sidebar-group-title">理科</div>
+    <div class="sidebar-item" data-filter="math">数学</div>
+    <div class="sidebar-item" data-filter="optics">光学</div>
+    <div class="sidebar-item" data-filter="mechanics">力学</div>
+    <div class="sidebar-item" data-filter="motion">运动学</div>
+    <div class="sidebar-item" data-filter="electricity">电与磁</div>
+    <div class="sidebar-item" data-filter="chemistry">化学</div>
+    <div class="sidebar-item" data-filter="biology">生物</div>
+    <div class="sidebar-item" data-filter="geography">地理</div>
+
+    <div class="sidebar-group-title">文科</div>
+    <div class="sidebar-item" data-filter="chinese">语文</div>
+    <div class="sidebar-item" data-filter="english">英语</div>
+    <div class="sidebar-item" data-filter="history">历史</div>
+    <div class="sidebar-item" data-filter="politics">道法</div>
+  </aside>
+
+  <main class="content">
+    <input type="text" id="searchBox" class="search-box" placeholder="🔍 搜索全科实验（如：凸透镜、浮力、细胞）...">
+    
+    <div id="content">
+      <!-- ================= 数学 ================= -->
+      <div class="category" data-cat="math">
+        <h2>数学</h2>
+        <div class="cards">
+          <a class="card search-item wip" data-title="二次函数图像" href="#"><h3>二次函数图像</h3><p>抛物线与参数的关系</p></a>
+          <a class="card search-item wip" data-title="几何变换" href="#"><h3>几何图形变换</h3><p>平移、旋转与对称</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 光学 ================= -->
+      <div class="category" data-cat="optics">
+        <h2>光学</h2>
+        <div class="cards">
+          <a class="card search-item" data-title="凸透镜成像" data-id="convex-lens" href="optics/convex-lens.html"><h3>凸透镜成像</h3><p>物距变化 → 像实时变</p></a>
+          <a class="card search-item" data-title="凹透镜成像" data-id="concave-lens" href="optics/concave-lens.html"><h3>凹透镜成像</h3><p>始终正立缩小虚像</p></a>
+          <a class="card search-item" data-title="光的反射定律" data-id="reflection" href="optics/reflection.html"><h3>光的反射定律</h3><p>入射角 = 反射角</p></a>
+          <a class="card search-item" data-title="光的折射" data-id="refraction" href="optics/refraction.html"><h3>光的折射</h3><p>空气 / 水 / 玻璃中的折射</p></a>
+          <a class="card search-item" data-title="全反射" data-id="total-reflection" href="optics/total-reflection.html"><h3>全反射</h3><p>超过临界角，折射光消失</p></a>
+          <a class="card search-item" data-title="平面镜成像" data-id="plane-mirror" href="optics/plane-mirror.html"><h3>平面镜成像</h3><p>物像对称，正立等大虚像</p></a>
+          <a class="card search-item" data-title="小孔成像" data-id="pinhole" href="optics/pinhole.html"><h3>小孔成像</h3><p>倒立实像，大小随距离变化</p></a>
+          <a class="card search-item" data-title="眼睛与视力矫正" data-id="eye-correction" href="optics/eye-correction.html"><h3>眼睛与视力矫正</h3><p>近视、远视、眼镜矫正</p></a>
+          <a class="card search-item" data-title="光的色散" data-id="dispersion" href="optics/dispersion.html"><h3>光的色散</h3><p>白光经过三棱镜分色</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 力学 ================= -->
+      <div class="category" data-cat="mechanics">
+        <h2>力学</h2>
+        <div class="cards">
+          <a class="card search-item" data-title="杠杆平衡" data-id="lever" href="mechanics/lever.html"><h3>杠杆平衡</h3><p>力臂与力矩</p></a>
+          <a class="card search-item" data-title="滑轮组" data-id="pulley" href="mechanics/pulley.html"><h3>滑轮组</h3><p>定滑轮 / 动滑轮，省力费距离</p></a>
+          <a class="card search-item" data-title="浮力" data-id="buoyancy" href="mechanics/buoyancy.html"><h3>浮力</h3><p>漂浮、悬浮、下沉</p></a>
+          <a class="card search-item" data-title="压强" data-id="pressure" href="mechanics/pressure.html"><h3>压强</h3><p>压力与受力面积的关系</p></a>
+          <a class="card search-item" data-title="摩擦力" data-id="friction" href="mechanics/friction.html"><h3>摩擦力</h3><p>静摩擦与滑动摩擦</p></a>
+          <a class="card search-item" data-title="自由落体" data-id="free-fall" href="mechanics/free-fall.html"><h3>自由落体</h3><p>小球下落，能量实时转换</p></a>
+          <a class="card search-item" data-title="单摆" data-id="pendulum" href="mechanics/pendulum.html"><h3>单摆</h3><p>动能 ↔ 势能实时转换</p></a>
+          <a class="card search-item" data-title="过山车" data-id="roller-coaster" href="mechanics/roller-coaster.html"><h3>过山车</h3><p>沿轨道运动，能量条实时变</p></a>
+          <a class="card search-item" data-title="弹簧振子" data-id="spring-oscillator" href="mechanics/spring-oscillator.html"><h3>弹簧振子</h3><p>弹性势能 ↔ 动能</p></a>
+          <a class="card search-item wip" data-title="连通器" href="#"><h3>连通器</h3><p>液面始终相平</p></a>
+          <a class="card search-item wip" data-title="大气压" href="#"><h3>大气压</h3><p>托里拆利实验</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 运动学 ================= -->
+      <div class="category" data-cat="motion">
+        <h2>运动学</h2>
+        <div class="cards">
+          <a class="card search-item" data-title="运动图像与平均速度" data-id="motion-graph" href="motion/motion-graph.html"><h3>运动图像与平均速度</h3><p>v-t / s-t 图像、平均速度综合</p></a>
+          <a class="card search-item" data-title="火车过桥" data-id="train-bridge" href="motion/train-bridge.html"><h3>火车过桥</h3><p>路程 = 桥长 + 车长</p></a>
+          <a class="card search-item" data-title="匀变速直线运动" data-id="accelerated-motion" href="motion/accelerated-motion.html"><h3>匀变速直线运动</h3><p>v = v₀ + at，s = v₀t + ½at²</p></a>
+          <a class="card search-item" data-title="刹车问题" data-id="braking" href="motion/braking.html"><h3>刹车问题</h3><p>反应距离 + 刹车距离</p></a>
+          <a class="card search-item" data-title="参照物与相对运动" data-id="relative-motion" href="motion/relative-motion.html"><h3>参照物与相对运动</h3><p>切换参照物，运动状态完全变</p></a>
+          <a class="card search-item" data-title="追及与相遇" data-id="chase-meeting" href="motion/chase-meeting.html"><h3>追及与相遇</h3><p>同向追及 / 相向相遇</p></a>
+          <a class="card search-item" data-title="平抛运动" data-id="projectile" href="motion/projectile.html"><h3>平抛运动</h3><p>水平匀速 + 竖直自由落体</p></a>
+          <a class="card search-item" data-title="圆周运动" data-id="circular-motion" href="motion/circular-motion.html"><h3>圆周运动</h3><p>速度沿切线方向</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 电与磁 ================= -->
+      <div class="category" data-cat="electricity">
+        <h2>电与磁</h2>
+        <div class="cards">
+          <a class="card search-item" data-title="串联电路" data-id="series-circuit" href="electricity/series-circuit.html"><h3>串联电路</h3><p>电流处处相等</p></a>
+          <a class="card search-item" data-title="并联电路" data-id="parallel-circuit" href="electricity/parallel-circuit.html"><h3>并联电路</h3><p>电流分流与汇合</p></a>
+          <a class="card search-item wip" data-title="欧姆定律" href="#"><h3>欧姆定律</h3><p>滑动变阻器与电压电流</p></a>
+          <a class="card search-item wip" data-title="电磁铁" href="#"><h3>电磁铁</h3><p>匝数与电流对磁性的影响</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 化学 ================= -->
+      <div class="category" data-cat="chemistry">
+        <h2>化学</h2>
+        <div class="cards">
+          <a class="card search-item" data-title="溶解度曲线" data-id="solubility" href="chemistry/solubility.html"><h3>溶解度曲线</h3><p>温度对溶解度的影响</p></a>
+          <a class="card search-item" data-title="酸碱指示剂与pH" data-id="ph-indicator" href="chemistry/ph-indicator.html"><h3>酸碱指示剂与 pH</h3><p>石蕊与酚酞的颜色魔法</p></a>
+          <a class="card search-item wip" data-title="质量守恒定律" href="#"><h3>质量守恒定律</h3><p>反应前后的微观粒子</p></a>
+          <a class="card search-item wip" data-title="金属活动性" href="#"><h3>金属活动性顺序</h3><p>置换反应模拟</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 生物 ================= -->
+      <div class="category" data-cat="biology">
+        <h2>生物</h2>
+        <div class="cards">
+          <a class="card search-item wip" data-title="动植物细胞结构" href="#"><h3>细胞结构</h3><p>动植物细胞对比</p></a>
+          <a class="card search-item wip" data-title="心脏与血液循环" href="#"><h3>心脏与血液循环</h3><p>体循环与肺循环动画</p></a>
+          <a class="card search-item wip" data-title="光合作用与呼吸作用" href="#"><h3>光合与呼吸作用</h3><p>气体交换与能量转化</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 地理 ================= -->
+      <div class="category" data-cat="geography">
+        <h2>地理</h2>
+        <div class="cards">
+          <a class="card search-item" data-title="地球自转与昼夜交替" data-id="day-night" href="earth/day-night.html"><h3>地球自转与昼夜交替</h3><p>晨昏线与昼夜变化</p></a>
+          <a class="card search-item" data-title="月相变化" data-id="moon-phase" href="earth/moon-phase.html"><h3>月相变化</h3><p>新月、上弦月、满月、下弦月</p></a>
+          <a class="card search-item wip" data-title="日食与月食" href="#"><h3>日食与月食</h3><p>光沿直线传播与天体位置</p></a>
+          <a class="card search-item wip" data-title="四季变化" href="#"><h3>四季变化与公转</h3><p>地轴倾斜与太阳直射点</p></a>
+          <a class="card search-item wip" data-title="水循环" href="#"><h3>自然界水循环</h3><p>蒸发、降水与径流</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 语文 ================= -->
+      <div class="category" data-cat="chinese">
+        <h2>语文</h2>
+        <div class="cards">
+          <a class="card search-item wip" data-title="古诗词时间轴" href="#"><h3>古诗词时间轴</h3><p>唐诗宋词的发展脉络</p></a>
+          <a class="card search-item wip" data-title="汉字演变" href="#"><h3>汉字演变</h3><p>从甲骨文到楷书</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 英语 ================= -->
+      <div class="category" data-cat="english">
+        <h2>英语</h2>
+        <div class="cards">
+          <a class="card search-item wip" data-title="高频词汇连连看" href="#"><h3>高频词汇连连看</h3><p>交互式词汇记忆</p></a>
+          <a class="card search-item wip" data-title="不规则动词表" href="#"><h3>不规则动词记忆卡</h3><p>动态翻转记忆</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 历史 ================= -->
+      <div class="category" data-cat="history">
+        <h2>历史</h2>
+        <div class="cards">
+          <a class="card search-item wip" data-title="中国朝代时间轴" href="#"><h3>中国朝代时间轴</h3><p>上下五千年动态演变</p></a>
+          <a class="card search-item wip" data-title="世界历史大事件" href="#"><h3>世界历史大事件</h3><p>中外历史横向对比</p></a>
+        </div>
+      </div>
+
+      <!-- ================= 道法 ================= -->
+      <div class="category" data-cat="politics">
+        <h2>道法</h2>
+        <div class="cards">
+          <a class="card search-item wip" data-title="宪法知识图谱" href="#"><h3>宪法知识图谱</h3><p>核心知识点网络图</p></a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="about.html">简介</a> ·
+  <a href="feedback.html">反馈</a> ·
+  <a href="support.html">支持我们</a>
+</div>
+
+<!-- 域名变更弹窗 -->
+<div id="domainPopup" class="domain-popup">
+  <div>
+    <strong>🎉 站点已升级为 ijhub！</strong><br>
+    新域名：<a href="https://ijhub.ccwu.cc" target="_blank">ijhub.ccwu.cc</a>
+  </div>
+  <button class="close-btn" onclick="closePopup()">×</button>
+</div>
+
+<script src="shared/common.js"></script>
+<script>
+(function(){
+  if (window.App) App.injectTopbar();
+
+  // === 域名变更弹窗 ===
+  (function(){
+    var lastClosed = localStorage.getItem('domainPopupClosed');
+    var now = new Date().getTime();
+    if (!lastClosed || (now - parseInt(lastClosed)) > 7 * 24 * 3600 * 1000) {
+      var popup = document.getElementById('domainPopup');
+      if (popup) popup.style.display = 'flex';
+    }
+  })();
+
+  window.closePopup = function() {
+    document.getElementById('domainPopup').style.display = 'none';
+    localStorage.setItem('domainPopupClosed', new Date().getTime());
+  };
+
+  // === 拦截未完成的卡片点击 ===
+  document.querySelectorAll('.card.wip').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.preventDefault(); // 阻止跳转
+      // 可以使用更漂亮的提示，这里用简单的原生弹窗
+      alert("🚧 该实验正在紧张制作中，敬请期待！\n\n如果你有好的创意，欢迎在【反馈】页告诉我。");
+    });
+  });
+
+  // === 首页基础逻辑 ===
+  function getRecent() {
+    try { return JSON.parse(localStorage.getItem('recent') || '[]'); }
+    catch (e) { return []; }
+  }
+  function recordView(id) {
+    if (!id) return;
+    var r = getRecent().filter(function (x) { return x !== id; });
+    r.unshift(id);
+    if (r.length > 6) r = r.slice(0, 6);
+    localStorage.setItem('recent', JSON.stringify(r));
+  }
+
+  // 只有真实带 data-id 的卡片才记录浏览历史
+  document.querySelectorAll('.card[data-id]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      sessionStorage.setItem('homeScrollY', window.scrollY);
+      recordView(el.dataset.id);
+    });
+  });
+
+  var content = document.getElementById('content');
+  var filter = 'all';
+
+  function applyFilter() {
+    sessionStorage.removeItem('homeScrollY');
+    var cats = content.querySelectorAll('.category');
+    var rw = document.getElementById('recentWrap');
+
+    if (filter === 'all') {
+      cats.forEach(function (c) { c.style.display = ''; });
+      if (rw) rw.remove();
+      return;
+    }
+    if (filter === 'recent') {
+      cats.forEach(function (c) { c.style.display = 'none'; });
+      if (rw) rw.remove();
+
+      rw = document.createElement('div');
+      rw.id = 'recentWrap';
+      rw.className = 'category';
+      var h2 = document.createElement('h2');
+      h2.textContent = '最近查看';
+      rw.appendChild(h2);
+
+      var ids = getRecent();
+      var found = [];
+      ids.forEach(function (id) {
+        document.querySelectorAll('.card[data-id]').forEach(function (el) {
+          if (el.dataset.id === id) found.push(el);
+        });
+      });
+
+      if (found.length === 0) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;color:#bbb;padding:40px 0;font-size:14px';
+        empty.textContent = '还没有查看记录';
+        rw.appendChild(empty);
+      } else {
+        var box = document.createElement('div');
+        box.className = 'cards';
+        found.forEach(function (orig) {
+          var clone = orig.cloneNode(true);
+          clone.addEventListener('click', function () { 
+            sessionStorage.setItem('homeScrollY', window.scrollY);
+            recordView(clone.dataset.id); 
+          });
+          box.appendChild(clone);
+        });
+        rw.appendChild(box);
+      }
+      content.appendChild(rw);
+      return;
+    }
+
+    cats.forEach(function (c) {
+      c.style.display = (c.dataset.cat === filter) ? '' : 'none';
+    });
+    if (rw) rw.remove();
+  }
+
+  document.querySelectorAll('.sidebar-item').forEach(function (el) {
+    el.addEventListener('click', function () {
+      document.querySelectorAll('.sidebar-item').forEach(function (x) { x.classList.remove('active'); });
+      el.classList.add('active');
+      filter = el.dataset.filter;
+      document.getElementById('searchBox').value = ''; 
+      applyFilter();
+    });
+  });
+
+  // === 全局搜索 ===
+  document.getElementById('searchBox').addEventListener('input', function(e) {
+    var val = e.target.value.toLowerCase().trim();
+    document.querySelectorAll('.sidebar-item').forEach(function (x) { x.classList.remove('active'); });
+    filter = 'all';
+    applyFilter();
+
+    if (!val) return; 
+
+    document.querySelectorAll('.category').forEach(function(cat) {
+      cat.style.display = 'none';
+    });
+
+    document.querySelectorAll('.card.search-item').forEach(function(card) {
+      var title = card.getAttribute('data-title') || '';
+      var text = card.innerText.toLowerCase();
+      if (title.toLowerCase().includes(val) || text.includes(val)) {
+        card.style.display = '';
+        card.closest('.category').style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  });
+
+  window.addEventListener('load', function() {
+    var savedY = sessionStorage.getItem('homeScrollY');
+    if (savedY) {
+      document.documentElement.style.scrollBehavior = 'auto';
+      window.scrollTo(0, parseInt(savedY, 10));
+      setTimeout(function() {
+        document.documentElement.style.scrollBehavior = 'smooth';
+      }, 50);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
