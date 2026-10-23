@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>匀变速直线运动 · 初中科学动态实验室</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>匀变速直线运动</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>公式</th><th>物理量</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>v = v₀ + at</td><td>末速度</td></tr>
+      <tr class="active"><td>s = v₀t + ½at²</td><td>位移</td></tr>
+      <tr class="active"><td>v² - v₀² = 2as</td><td>无时间公式</td></tr>
+      <tr class="active"><td>v̄ = (v₀ + v)/2</td><td>平均速度</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  <label>初速度 v₀ = <span id="v0Val">2.0</span> m/s
+    <input type="range" id="v0Range" min="0" max="20" value="2" step="0.5">
+  </label>
+  <label>加速度 a = <span id="aVal">2.0</span> m/s²
+    <input type="range" id="aRange" min="-5" max="5" value="2" step="0.2">
+  </label>
+  <label>时间范围 T = <span id="tMaxVal">10</span> s
+    <input type="range" id="tMaxRange" min="3" max="20" value="10" step="1">
+  </label>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+  <div style="font-size:13px;color:#666;margin-bottom:8px">播放模式</div>
+  <div class="row">
+    <input type="checkbox" id="playPt" checked>
+    <label for="playPt" style="margin:0">动点自动移动</label>
+  </div>
+  <label>速度 = <span id="speedVal">1.0</span>×
+    <input type="range" id="speedRange" min="0.1" max="3" value="1" step="0.1">
+  </label>
+  <button id="playBtn">▶ 播放</button>
+  <button id="resetBtn" class="secondary">↺ 重置</button>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+    <div class="hint">看上面小车同步移动，下方 v-t 图实时描点</div>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish ·
+  <a href="../about.html">简介</a> ·
+  <a href="../feedback.html">反馈</a> ·
+  <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script src="../shared/optics.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var opt = new OpticsCanvas(canvas, { scale: 1 });
+
+  var v0 = 2, a = 2, tMax = 10;
+  var tNow = 0;
+  var playing = false, rafId = null;
+
+  // 运动学量
+  function at(t) {
+    var v = v0 + a * t;
+    var s = v0 * t + 0.5 * a * t * t;
+    if (v < 0) { v = 0; }
+    return { v: v, s: Math.max(0, s) };
+  }
+
+  function draw() {
+    var ctx = opt.ctx;
+    var W = opt.W, H = opt.H;
+    opt.clear();
+
+    // 上半部分：小车 + 场景
+    var sceneH = H * 0.4;
+    var trackY = sceneH - 30;
+    var totalS = at(tMax).s;
+    var sceneS = Math.max(20, totalS * 1.1);
+    var pxPerM = (W - 80) / sceneS;
+
+    // 地面
+    ctx.save();
+    ctx.strokeStyle = '#95a5a6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(40, trackY);
+    ctx.lineTo(W - 40, trackY);
+    ctx.stroke();
+    ctx.restore();
+
+    // 刻度
+    ctx.save();
+    ctx.fillStyle = '#888';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    var step = Math.pow(10, Math.floor(Math.log10(sceneS / 5)));
+    if (step < 1) step = 1;
+    for (var sm = 0; sm <= sceneS; sm += step) {
+      var px = 40 + sm * pxPerM;
+      ctx.beginPath();
+      ctx.moveTo(px, trackY);
+      ctx.lineTo(px, trackY + 6);
+      ctx.stroke();
+      ctx.fillText(sm, px, trackY + 20);
+    }
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('路程 s / m', W / 2, trackY + 40);
+    ctx.restore();
+
+    // 小车
+    var now = at(tNow);
+    var carX = 40 + now.s * pxPerM;
+    var carW = 50, carH = 26;
+
+    // 速度箭头
+    if (now.v > 0.1) {
+      var arrowLen = Math.min(60, now.v * 4);
+      ctx.save();
+      ctx.strokeStyle = '#27ae60';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(carX + carW, trackY - carH / 2);
+      ctx.lineTo(carX + carW + arrowLen, trackY - carH / 2);
+      ctx.stroke();
+      ctx.fillStyle = '#27ae60';
+      ctx.beginPath();
+      ctx.moveTo(carX + carW + arrowLen, trackY - carH / 2);
+      ctx.lineTo(carX + carW + arrowLen - 12, trackY - carH / 2 - 7);
+      ctx.lineTo(carX + carW + arrowLen - 12, trackY - carH / 2 + 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#27ae60';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('v=' + now.v.toFixed(1) + ' m/s', carX + carW + 6, trackY - carH / 2 - 12);
+      ctx.restore();
+    }
+
+    ctx.save();
+    var grad = ctx.createLinearGradient(carX, 0, carX + carW, 0);
+    grad.addColorStop(0, '#3498db');
+    grad.addColorStop(1, '#2980b9');
+    ctx.fillStyle = grad;
+    ctx.fillRect(carX, trackY - carH, carW, carH);
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(carX, trackY - carH, carW, carH);
+    // 车轮
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath();
+    ctx.arc(carX + 12, trackY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(carX + carW - 12, trackY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 下半部分：v-t 图
+    var plotTop = sceneH + 20;
+    var plotBot = H - 50;
+    var plotX0 = 60;
+    var plotX1 = W - 30;
+
+    var vMax = Math.max(v0, at(tMax).v, 5) * 1.1;
+    function w2s(t, v) {
+      return [
+        plotX0 + (t / tMax) * (plotX1 - plotX0),
+        plotBot - (v / vMax) * (plotBot - plotTop)
+      ];
+    }
+
+    // 背景
+    ctx.save();
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(plotX0, plotTop, plotX1 - plotX0, plotBot - plotTop);
+    ctx.restore();
+
+    // 网格
+    ctx.save();
+    ctx.strokeStyle = '#e8ecef';
+    ctx.lineWidth = 1;
+    for (var i = 0; i <= 4; i++) {
+      var tp = w2s(tMax * i / 4, 0);
+      ctx.beginPath();
+      ctx.moveTo(tp[0], plotTop);
+      ctx.lineTo(tp[0], plotBot);
+      ctx.stroke();
+      var vp = w2s(0, vMax * i / 4);
+      ctx.beginPath();
+      ctx.moveTo(plotX0, vp[1]);
+      ctx.lineTo(plotX1, vp[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 坐标轴
+    ctx.save();
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(plotX0, plotTop);
+    ctx.lineTo(plotX0, plotBot);
+    ctx.lineTo(plotX1, plotBot);
+    ctx.stroke();
+    ctx.restore();
+
+    // 刻度
+    ctx.save();
+    ctx.fillStyle = '#555';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var j = 0; j <= 4; j++) {
+      var vv = vMax * j / 4;
+      var pp = w2s(0, vv);
+      ctx.fillText(vv.toFixed(1), plotX0 - 6, pp[1]);
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (var k = 0; k <= 4; k++) {
+      var tt = tMax * k / 4;
+      var pq = w2s(tt, 0);
+      ctx.fillText(tt.toFixed(0), pq[0], plotBot + 4);
+    }
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('时间 t / s', (plotX0 + plotX1) / 2, plotBot + 22);
+    ctx.save();
+    ctx.translate(18, (plotTop + plotBot) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('速度 v / (m/s)', 0, 0);
+    ctx.restore();
+    ctx.restore();
+
+    // v-t 线
+    ctx.save();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    var pStart = w2s(0, v0);
+    ctx.moveTo(pStart[0], pStart[1]);
+    var pEnd = w2s(tMax, v0 + a * tMax);
+    ctx.lineTo(pEnd[0], pEnd[1]);
+    ctx.stroke();
+    ctx.restore();
+
+    // 动点
+    var pc = w2s(tNow, now.v);
+    ctx.save();
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath();
+    ctx.arc(pc[0], pc[1], 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // 侧栏
+    document.getElementById('v0Val').textContent = v0.toFixed(1);
+    document.getElementById('aVal').textContent = a.toFixed(1);
+    document.getElementById('tMaxVal').textContent = tMax;
+    document.getElementById('v0Range').value = v0;
+    document.getElementById('aRange').value = a;
+    document.getElementById('tMaxRange').value = tMax;
+
+    var avg = (v0 + now.v) / 2;
+    document.getElementById('readout').innerHTML =
+      't = <b>' + tNow.toFixed(2) + '</b> s<br>' +
+      'v = v₀ + at = <b>' + now.v.toFixed(2) + '</b> m/s<br>' +
+      's = v₀t + ½at² = <b>' + now.s.toFixed(2) + '</b> m<br>' +
+      '平均速度 v̄ = <b>' + avg.toFixed(2) + '</b> m/s<br>' +
+      '<span style="font-size:12px;color:#888">' +
+      (a > 0 ? '匀加速运动' : a < 0 ? '匀减速运动' : '匀速运动') + '</span>';
+  }
+
+  document.getElementById('v0Range').addEventListener('input', function(e){ v0 = parseFloat(e.target.value); tNow = 0; draw(); });
+  document.getElementById('aRange').addEventListener('input', function(e){ a = parseFloat(e.target.value); tNow = 0; draw(); });
+  document.getElementById('tMaxRange').addEventListener('input', function(e){ tMax = parseFloat(e.target.value); if (tNow > tMax) tNow = tMax; draw(); });
+  document.getElementById('speedRange').addEventListener('input', function(e){
+    document.getElementById('speedVal').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('resetBtn').addEventListener('click', function(){ tNow = 0; stopPlay(); draw(); });
+
+  function stopPlay() {
+    playing = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+  }
+
+  function tick() {
+    if (!playing) return;
+    var spd = parseFloat(document.getElementById('speedRange').value);
+    tNow += 0.05 * spd;
+    if (tNow > tMax) tNow = 0;
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('playBtn').addEventListener('click', function(){
+    if (playing) stopPlay();
+    else {
+      if (!document.getElementById('playPt').checked) { alert('请先勾选"动点自动移动"'); return; }
+      playing = true;
+      document.getElementById('playBtn').textContent = '⏸ 暂停';
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  window.addEventListener('themechange', draw);
+  window.addEventListener('resize', function(){ opt._initHiDPI(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
