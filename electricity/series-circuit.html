@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>串联电路 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>串联电路</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <!-- 顶部规律表格 -->
+  <table class="case-table">
+    <thead>
+      <tr><th>规律</th><th>关系</th></tr>
+    </thead>
+    <tbody>
+      <tr class="active"><td>电流</td><td>I = I₁ = I₂</td></tr>
+      <tr class="active"><td>电压</td><td>U = U₁ + U₂</td></tr>
+      <tr class="active"><td>电阻</td><td>R = R₁ + R₂</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  
+  <div class="row" style="margin-bottom:10px;">
+    <input type="checkbox" id="switchToggle" checked>
+    <label for="switchToggle" style="margin:0; cursor:pointer; font-weight:bold; color:#2c3e50;">闭合总开关</label>
+  </div>
+  
+  <label>电源电压 U = <span id="uVal">12.0</span> V
+    <input type="range" id="uRange" min="1" max="24" value="12" step="0.5">
+  </label>
+  
+  <label>灯泡 L₁ 电阻 = <span id="r1Val">10.0</span> Ω
+    <input type="range" id="r1Range" min="2" max="30" value="10" step="1">
+  </label>
+  
+  <label>灯泡 L₂ 电阻 = <span id="r2Val">20.0</span> Ω
+    <input type="range" id="r2Range" min="2" max="30" value="20" step="1">
+  </label>
+
+  <div class="readout" id="readout" style="margin-top:16px;"></div>
+  <div style="font-size:12px; color:#888; margin-top:10px; line-height:1.5;">
+    💡 <b>画布交互：</b><br>
+    1. 点击开关可通/断电。<br>
+    2. 拖动变阻器滑片改变电阻。<br>
+    3. 点击灯泡可模拟“灯丝烧毁”。
+  </div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish · <a href="../about.html">简介</a> · <a href="../feedback.html">反馈</a> · <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var ctx = canvas.getContext('2d');
+  var W, H;
+  
+  // 物理参数
+  var U = 12, R1 = 10, R2 = 20, Rv = 5; // Rv 是变阻器阻值
+  var isClosed = true, isBurnt = false; // 故障模拟
+
+  // 动画参数
+  var offset = 0;
+  var needleA = -Math.PI/2, needleV1 = -Math.PI/2, needleV2 = -Math.PI/2; // 指针当前角度
+  var targetA = -Math.PI/2, targetV1 = -Math.PI/2, targetV2 = -Math.PI/2; // 指针目标角度
+  
+  // 交互热区
+  var swBox = {x:0, y:0, w:0, h:0};
+  var sliderBox = {x:0, y:0, w:0, h:0, val: Rv};
+  var bulb1Pos = {x:0, y:0}, bulb2Pos = {x:0, y:0};
+  var isDragging = false;
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = rect.width; H = rect.height;
+  }
+
+  function draw() {
+    if (!W) return;
+    ctx.clearRect(0, 0, W, H);
+
+    // 计算物理量
+    var I = (isClosed && !isBurnt) ? U / (R1 + R2 + Rv) : 0;
+    var U1 = I * R1, U2 = I * R2, Uv = I * Rv;
+
+    // 指针缓动逻辑
+    targetA = -Math.PI/2 + Math.PI * Math.min(1, I / 2); // 假设量程 2A
+    targetV1 = -Math.PI/2 + Math.PI * Math.min(1, U1 / 24); // 假设量程 24V
+    targetV2 = -Math.PI/2 + Math.PI * Math.min(1, U2 / 24);
+    needleA += (targetA - needleA) * 0.15;
+    needleV1 += (targetV1 - needleV1) * 0.15;
+    needleV2 += (targetV2 - needleV2) * 0.15;
+
+    // --- 布局参数 ---
+    var left = W * 0.15, right = W * 0.75, top = H * 0.35, bot = H * 0.65;
+    var midX = (left + right) / 2;
+
+    // ================= 1. 画导线 =================
+    ctx.strokeStyle = '#34495e'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.rect(left, top, right - left, bot - top); ctx.stroke();
+
+    // ================= 2. 画电源 =================
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillRect(left - 6, (top + bot) / 2 - 20, 12, 15); // 长线
+    ctx.fillRect(left - 12, (top + bot) / 2 + 5, 24, 8);  // 短线
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('+', left - 20, (top + bot) / 2 - 10);
+    ctx.fillText('-', left - 20, (top + bot) / 2 + 12);
+    ctx.fillStyle = '#333'; ctx.fillText('U='+U+'V', left - 25, (top + bot) / 2 + 35);
+
+    // ================= 3. 画灯泡 =================
+    bulb1Pos = {x: left + (right-left)*0.3, y: top};
+    bulb2Pos = {x: left + (right-left)*0.7, y: top};
+    drawBulb(bulb1Pos.x, bulb1Pos.y, I, 'L₁=' + R1 + 'Ω', isBurnt);
+    drawBulb(bulb2Pos.x, bulb2Pos.y, I, 'L₂=' + R2 + 'Ω', false);
+
+    // ================= 4. 画滑动变阻器 =================
+    var sW = 80, sH = 16, sX = midX - sW/2, sY = bot - 8;
+    sliderBox = {x: sX, y: sY, w: sW, h: sH, val: Rv};
+    var sliderPos = sX + (Rv / 20) * sW; // 假设变阻器最大 20欧
+
+    ctx.fillStyle = '#ecf0f1'; ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 2;
+    ctx.fillRect(sX, sY, sW, sH); ctx.strokeRect(sX, sY, sW, sH);
+    // 滑片
+    ctx.fillStyle = isDragging ? '#e74c3c' : '#3498db';
+    ctx.beginPath(); ctx.moveTo(sliderPos, sY); ctx.lineTo(sliderPos - 8, sY - 12); ctx.lineTo(sliderPos + 8, sY - 12); ctx.fill();
+    ctx.fillStyle = '#2c3e50'; ctx.textAlign = 'center'; ctx.font = '12px sans-serif';
+    ctx.fillText('变阻器 Rv='+Rv+'Ω', midX, sY + 30);
+
+    // ================= 5. 画开关 =================
+    var swX = left + (right-left)*0.5, swY = bot;
+    swBox = {x: swX, y: swY, w: 40, h: 30};
+    drawSwitch(swX, swY);
+
+    // ================= 6. 画电表 =================
+    // 电流表 A 放在底部偏左
+    drawMeter(left + 40, bot - 40, 'A', I.toFixed(2) + ' A', needleA);
+    // 电压表 V1 放在左上
+    drawMeter(bulb1Pos.x, top - 45, 'V₁', U1.toFixed(1) + ' V', needleV1);
+    // 电压表 V2 放在右上
+    drawMeter(bulb2Pos.x, top - 45, 'V₂', U2.toFixed(1) + ' V', needleV2);
+
+    // ================= 7. 画电压分布柱状图 =================
+    drawVoltageChart(W * 0.82, H * 0.35, W * 0.1, H * 0.3, U1, U2, Uv, U);
+
+    // ================= 8. 粒子动画 =================
+    if (isClosed && !isBurnt && I > 0) {
+      offset = (offset + I * 0.5) % 30;
+      drawLineParticles(left, top, right, top, offset);
+      drawLineParticles(right, top, right, bot, offset);
+      drawLineParticles(right, bot, left, bot, offset);
+      drawLineParticles(left, bot, left, top, offset);
+    }
+
+    // 更新侧边栏
+    var readout = document.getElementById('readout');
+    if (isBurnt) {
+      readout.innerHTML = '<b style="color:#e74c3c; font-size:16px;">⚠️ L₁ 灯丝已烧断！</b><br>电路断开，I = 0 A。请点击画布上的 L₁ 恢复。';
+    } else if (!isClosed) {
+      readout.innerHTML = '<b style="color:#e74c3c;">总开关断开，无电流。</b><br>I = 0 A';
+    } else {
+      readout.innerHTML =
+        '总电流 I = <b>' + I.toFixed(2) + '</b> A<br>' +
+        'L₁ 分压 U₁ = <b>' + U1.toFixed(2) + '</b> V<br>' +
+        'L₂ 分压 U₂ = <b>' + U2.toFixed(2) + '</b> V<br>' +
+        '变阻器分压 Uv = <b>' + Uv.toFixed(2) + '</b> V<br>' +
+        '<span style="font-size:12px;color:#888;">总电阻 R总 = '+ (R1+R2+Rv) +' Ω</span>';
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  // --- 绘图函数细节 ---
+
+  function drawBulb(cx, cy, current, text, burnt) {
+    // 底座
+    ctx.fillStyle = '#ecf0f1'; ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 2;
+    ctx.fillRect(cx - 15, cy - 8, 30, 16); ctx.strokeRect(cx - 15, cy - 8, 30, 16);
+    ctx.fillStyle = '#2c3e50'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(text, cx, cy - 20);
+
+    // 光晕
+    if (current > 0 && !burnt) {
+      var glow = ctx.createRadialGradient(cx, cy, 5, cx, cy, 25 + current * 15);
+      glow.addColorStop(0, 'rgba(241, 196, 15, 0.6)');
+      glow.addColorStop(1, 'rgba(241, 196, 15, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(cx, cy, 25 + current * 15, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 玻璃体
+    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.fillStyle = burnt ? '#333' : (current > 0 ? '#f1c40f' : '#bdc3c7');
+    ctx.fill(); ctx.stroke();
+    
+    // 灯丝
+    if (burnt) {
+      ctx.beginPath(); ctx.moveTo(cx - 5, cy); ctx.lineTo(cx - 2, cy + 3); // 断裂
+      ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + 2, cy + 3);
+    } else {
+      ctx.beginPath(); ctx.moveTo(cx - 5, cy); ctx.lineTo(cx, cy + 6); ctx.lineTo(cx + 5, cy); 
+    }
+    ctx.strokeStyle = burnt ? '#e74c3c' : (current > 0 ? '#e67e22' : '#7f8c8d'); ctx.stroke();
+  }
+
+  function drawSwitch(cx, cy) {
+    ctx.save(); 
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx - 20, cy - 20, 40, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath(); ctx.arc(cx - 15, cy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 15, cy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = isClosed ? '#27ae60' : '#e74c3c'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(cx - 15, cy);
+    if (isClosed) ctx.lineTo(cx + 15, cy); else ctx.lineTo(cx + 5, cy - 20);
+    ctx.stroke(); ctx.restore();
+  }
+
+  function drawMeter(cx, cy, label, text, angle) {
+    var r = 24;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 0);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = '#34495e'; ctx.lineWidth = 2; ctx.stroke();
+    
+    // 刻度
+    for(var i=0; i<=10; i++) {
+      var a = Math.PI + (Math.PI/10)*i;
+      ctx.beginPath(); ctx.moveTo(cx+Math.cos(a)*(r-4), cy+Math.sin(a)*(r-4));
+      ctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); ctx.stroke();
+    }
+    // 指针 (角度用缓动后的)
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle)*(r-6), cy + Math.sin(angle)*(r-6));
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    // 中心轴
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fillStyle = '#34495e'; ctx.fill();
+
+    // 文字
+    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(label, cx, cy - 6);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px sans-serif'; ctx.fillText(text, cx, cy + 12);
+    ctx.restore();
+  }
+
+  function drawVoltageChart(x, y, w, h, u1, u2, uv, total) {
+    if (total === 0) return;
+    ctx.save();
+    ctx.fillStyle = '#f8fafc'; ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    
+    var maxH = h - 30;
+    var barW = w / 4.5;
+    var gap = (w - barW*3) / 4;
+    
+    var bars = [
+      { val: u1, color: '#3b82f6', label: 'U₁' },
+      { val: u2, color: '#10b981', label: 'U₂' },
+      { val: uv, color: '#f59e0b', label: 'Uv' }
+    ];
+
+    bars.forEach(function(b, i) {
+      var bx = x + gap + i * (barW + gap);
+      var bh = (b.val / total) * maxH;
+      if (bh < 2 && b.val > 0) bh = 2; // 最小可见高度
+      
+      ctx.fillStyle = b.color;
+      ctx.fillRect(bx, y + h - 20 - bh, barW, bh);
+      
+      ctx.fillStyle = '#475569'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(b.label, bx + barW/2, y + h - 5);
+      ctx.fillText(b.val.toFixed(1) + 'V', bx + barW/2, y + h - 25 - bh);
+    });
+    
+    ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+    ctx.fillText('电压分配', x + w/2, y + 15);
+    ctx.restore();
+  }
+
+  function drawLineParticles(x1, y1, x2, y2, off) {
+    var len = Math.hypot(x2 - x1, y2 - y1); if (len === 0) return;
+    var dx = (x2 - x1) / len, dy = (y2 - y1) / len;
+    ctx.fillStyle = '#f39c12';
+    for (var d = 0; d <= len; d += 30) {
+      var dist = (d + off) % len;
+      ctx.beginPath(); ctx.arc(x1 + dx * dist, y1 + dy * dist, 4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // --- 交互事件 ---
+  canvas.addEventListener('pointerdown', function(e) {
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    // 1. 点击开关
+    if (mx > swBox.x - 25 && mx < swBox.x + 25 && my > swBox.y - 25 && my < swBox.y + 20) {
+      isClosed = !isClosed; 
+      document.getElementById('switchToggle').checked = isClosed;
+      return;
+    }
+
+    // 2. 点击灯泡烧毁
+    if (Math.hypot(mx - bulb1Pos.x, my - bulb1Pos.y) < 20) {
+      isBurnt = !isBurnt; return;
+    }
+
+    // 3. 按住变阻器滑片
+    if (mx > sliderBox.x - 20 && mx < sliderBox.x + sliderBox.w + 20 && my > sliderBox.y - 25 && my < sliderBox.y + 20) {
+      isDragging = true;
+    }
+  });
+
+  canvas.addEventListener('pointermove', function(e) {
+    if (!isDragging) return;
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var ratio = (mx - sliderBox.x) / sliderBox.w;
+    ratio = Math.max(0, Math.min(1, ratio));
+    Rv = Math.round(ratio * 20); // 0~20欧
+  });
+
+  canvas.addEventListener('pointerup', () => isDragging = false);
+  canvas.addEventListener('pointerleave', () => isDragging = false);
+
+  // --- 侧边栏交互 ---
+  document.getElementById('switchToggle').addEventListener('change', function(e) { isClosed = e.target.checked; });
+  document.getElementById('uRange').addEventListener('input', function(e){ U = parseFloat(e.target.value); document.getElementById('uVal').textContent = U.toFixed(1); });
+  document.getElementById('r1Range').addEventListener('input', function(e){ R1 = parseFloat(e.target.value); document.getElementById('r1Val').textContent = R1.toFixed(1); });
+  document.getElementById('r2Range').addEventListener('input', function(e){ R2 = parseFloat(e.target.value); document.getElementById('r2Val').textContent = R2.toFixed(1); });
+
+  window.addEventListener('resize', resize);
+  resize(); draw();
+})();
+</script>
+</body>
+</html>
