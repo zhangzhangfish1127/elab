@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电磁铁 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>电磁铁</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <!-- 顶部规律表格 -->
+  <table class="case-table">
+    <thead>
+      <tr><th>因素</th><th>磁性强弱</th></tr>
+    </thead>
+    <tbody>
+      <tr class="active"><td>电流越大</td><td>磁性越强</td></tr>
+      <tr class="active"><td>匝数越多</td><td>磁性越强</td></tr>
+      <tr class="active"><td>极性</td><td>与电流方向有关</td></tr>
+    </tbody>
+  </table>
+
+  <h3>控制面板</h3>
+  
+  <div class="row" style="margin-bottom:10px;">
+    <input type="checkbox" id="switchToggle" checked>
+    <label for="switchToggle" style="margin:0; cursor:pointer; font-weight:bold; color:#2c3e50;">闭合开关（通电）</label>
+  </div>
+  
+  <button id="flipBtn" class="secondary" style="margin-bottom:16px;">🔄 切换电源正负极</button>
+
+  <label>电源电压 U = <span id="uVal">6.0</span> V
+    <input type="range" id="uRange" min="1" max="12" value="6" step="0.5">
+  </label>
+  
+  <div class="row">
+    <label style="margin:0; white-space:nowrap">线圈匝数</label>
+    <select id="nSel">
+      <option value="50">少 (50匝)</option>
+      <option value="100" selected>中 (100匝)</option>
+      <option value="150">多 (150匝)</option>
+    </select>
+  </div>
+
+  <div class="readout" id="readout" style="margin-top:16px;"></div>
+  
+  <div style="font-size:12px; color:#888; margin-top:10px; line-height:1.5;">
+    💡 <b>画布交互：</b><br>
+    1. 点击开关可通/断电。<br>
+    2. 拖动下方变阻器滑片改变电流。
+  </div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish · <a href="../about.html">简介</a> · <a href="../feedback.html">反馈</a> · <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var ctx = canvas.getContext('2d');
+  var W, H;
+  
+  // 参数
+  var U = 6, Rv = 2, rCoil = 1, N = 100; // 电压、变阻器阻值、线圈内阻、匝数
+  var isClosed = true, direction = 1; // 1正向，-1反向
+
+  // 物理引擎：大头针
+  var pins = [];
+  var maxPins = 20;
+
+  // 缓动指针
+  var needleA = -Math.PI/2, targetA = -Math.PI/2;
+  
+  // 交互
+  var swBox = {x:0, y:0}, sliderBox = {x:0, y:0, w:60, h:16, val: Rv}, isDragging = false;
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = rect.width; H = rect.height;
+    initPins();
+  }
+
+  function initPins() {
+    pins = [];
+    for(var i=0; i<maxPins; i++) {
+      pins.push({
+        x: W * 0.5 - 30 + Math.random() * 60,
+        y: H * 0.85 + Math.random() * 20,
+        vy: 0,
+        attached: false,
+        grounded: true
+      });
+    }
+  }
+
+  function draw() {
+    if (!W) return;
+    ctx.clearRect(0, 0, W, H);
+
+    var I = isClosed ? U / (Rv + rCoil) : 0;
+    var strength = I * N;
+    var attachCount = Math.floor(strength / 20); // 控制吸附数量
+    if (attachCount > maxPins) attachCount = maxPins;
+
+    // 指针缓动
+    targetA = -Math.PI/2 + Math.PI * Math.min(1, I / 6);
+    needleA += (targetA - needleA) * 0.15;
+
+    // --- 布局 ---
+    var cx = W * 0.5, cy = H * 0.45;
+    var coreW = 40, coreH = 120;
+
+    // ================= 1. 画导线与电源 =================
+    var left = W * 0.15, right = W * 0.85, bot = H * 0.75;
+    
+    ctx.strokeStyle = '#34495e'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    // 导线连到电磁铁线圈两侧
+    ctx.beginPath(); ctx.moveTo(left, bot); ctx.lineTo(left, cy); ctx.lineTo(cx - coreW/2 - 15, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + coreW/2 + 15, cy); ctx.lineTo(right, cy); ctx.lineTo(right, bot); ctx.stroke();
+    // 底部导线
+    ctx.beginPath(); ctx.moveTo(left, bot); ctx.lineTo(right, bot); ctx.stroke();
+
+    // 电源（左侧）
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillRect(left - 15, cy + 30, 8, 15); // 短线
+    ctx.fillRect(left - 15, cy + 50, 16, 15); // 长线
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(direction === 1 ? '+' : '-', left - 20, cy + 45);
+    ctx.fillText(direction === 1 ? '-' : '+', left - 20, cy + 65);
+
+    // ================= 2. 画开关与变阻器 =================
+    // 开关（底部偏左）
+    var swX = left + (right-left)*0.3, swY = bot;
+    swBox = {x: swX, y: swY};
+    ctx.fillStyle = '#fff'; ctx.fillRect(swX - 20, swY - 20, 40, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath(); ctx.arc(swX - 10, swY, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(swX + 10, swY, 4, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = isClosed ? '#27ae60' : '#e74c3c'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(swX - 10, swY);
+    if (isClosed) ctx.lineTo(swX + 10, swY); else ctx.lineTo(swX + 5, swY - 15);
+    ctx.stroke();
+
+    // 变阻器（底部偏右）
+    var sW = 80, sH = 16, sX = left + (right-left)*0.6, sY = bot - sH/2;
+    sliderBox = {x: sX, y: sY, w: sW, h: sH, val: Rv};
+    var sliderPos = sX + (Rv / 20) * sW;
+
+    ctx.fillStyle = '#ecf0f1'; ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 2;
+    ctx.fillRect(sX, sY, sW, sH); ctx.strokeRect(sX, sY, sW, sH);
+    ctx.fillStyle = isDragging ? '#e74c3c' : '#3498db';
+    ctx.beginPath(); ctx.moveTo(sliderPos, sY); ctx.lineTo(sliderPos - 8, sY - 12); ctx.lineTo(sliderPos + 8, sY - 12); ctx.fill();
+    ctx.fillStyle = '#2c3e50'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('R=' + Rv + 'Ω', sX + sW/2, sY + 25);
+
+    // 电流表（右上角）
+    drawMeter(W * 0.85, cy - 40, 'A', I.toFixed(2) + ' A', needleA);
+
+    // ================= 3. 画电磁铁 =================
+    // 铁芯
+    ctx.fillStyle = '#95a5a6'; ctx.fillRect(cx - coreW/2, cy - coreH/2, coreW, coreH);
+    ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2; ctx.strokeRect(cx - coreW/2, cy - coreH/2, coreW, coreH);
+
+    // 线圈
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 4;
+    var coils = N / 10; 
+    var step = coreH / coils;
+    for (var i = 0; i < coils; i++) {
+      var y = cy - coreH / 2 + i * step + step / 2;
+      ctx.beginPath(); ctx.ellipse(cx, y, coreW / 2 + 8, 5, 0, 0, Math.PI, false); ctx.stroke();
+    }
+
+    // N/S 极
+    if (isClosed && I > 0) {
+      ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(direction === 1 ? 'N' : 'S', cx - coreW/2 - 25, cy - coreH/4);
+      ctx.fillText(direction === 1 ? 'S' : 'N', cx - coreW/2 - 25, cy + coreH/4);
+    }
+
+    // ================= 4. 磁场线与大头针 =================
+    if (strength > 10) {
+      // 磁场线
+      ctx.strokeStyle = '#e74c3c'; 
+      ctx.globalAlpha = Math.min(0.8, strength / 150);
+      ctx.lineWidth = 1 + strength / 200;
+      
+      for (var m = 1; m <= 3; m++) {
+        var r = 50 + m * 20;
+        var sA = direction === 1 ? -Math.PI/2 : Math.PI/2;
+        var eA = direction === 1 ? Math.PI/2 : -Math.PI/2;
+        
+        ctx.beginPath();
+        ctx.moveTo(cx + coreW/2, cy + sA * 40);
+        ctx.bezierCurveTo(cx + r, cy + sA * 50, cx + r, cy + eA * 50, cx + coreW/2, cy + eA * 40);
+        ctx.stroke();
+        
+        var ay = cy + (sA + eA)/2 * 40;
+        var ax = cx + r;
+        ctx.beginPath();
+        if (direction === 1) { ctx.moveTo(ax, ay+6); ctx.lineTo(ax-6, ay-6); ctx.lineTo(ax+6, ay-6); }
+        else { ctx.moveTo(ax, ay-6); ctx.lineTo(ax-6, ay+6); ctx.lineTo(ax+6, ay+6); }
+        ctx.fillStyle = '#e74c3c'; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // 物理更新大头针
+      var groundY = H * 0.85;
+      var baseY = cy + coreH / 2 + 10;
+      
+      pins.forEach(function(p, idx) {
+        if (isClosed && idx < attachCount) {
+          p.attached = true; p.vy = 0; p.grounded = false;
+          p.x += (cx - 20 + (idx % 6) * 8 - p.x) * 0.2;
+          p.y += (baseY + Math.floor(idx/6) * 12 - p.y) * 0.2;
+        } else {
+          p.attached = false;
+          if (!p.grounded) {
+            p.vy += 0.6; p.y += p.vy;
+            if (p.y >= groundY) { p.y = groundY + Math.random() * 10; p.vy = 0; p.grounded = true; }
+          }
+        }
+      });
+    } else {
+      // 没磁性时直接落地
+      pins.forEach(function(p) {
+        p.attached = false; 
+        if (!p.grounded) {
+          p.vy += 0.6; p.y += p.vy;
+          if (p.y >= H * 0.85) { p.y = H * 0.85 + Math.random()*10; p.vy = 0; p.grounded = true; }
+        }
+      });
+    }
+
+    // 画大头针
+    pins.forEach(function(p) {
+      ctx.fillStyle = '#7f8c8d'; ctx.strokeStyle = '#95a5a6'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y + 10, 3, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y + 10); ctx.stroke();
+    });
+
+    // 更新侧边栏
+    document.getElementById('readout').innerHTML =
+      '当前极性：<b>' + (direction === 1 ? '上N 下S' : '上S 下N') + '</b><br>' +
+      '通过电流 I = <b>' + I.toFixed(2) + '</b> A<br>' +
+      '磁性强弱 = <b>' + strength.toFixed(0) + '</b><br>' +
+      '吸住大头针：<b>' + Math.min(attachCount, maxPins) + '</b> 根';
+
+    requestAnimationFrame(draw);
+  }
+
+  function drawMeter(cx, cy, label, text, angle) {
+    var r = 22;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 0);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = '#34495e'; ctx.lineWidth = 2; ctx.stroke();
+    for(var i=0; i<=10; i++) {
+      var a = Math.PI + (Math.PI/10)*i;
+      ctx.beginPath(); ctx.moveTo(cx+Math.cos(a)*(r-4), cy+Math.sin(a)*(r-4));
+      ctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle)*(r-6), cy + Math.sin(angle)*(r-6));
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fillStyle = '#34495e'; ctx.fill();
+    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(label, cx, cy - 6); ctx.fillStyle = '#e74c3c'; ctx.fillText(text, cx, cy + 12);
+    ctx.restore();
+  }
+
+  // --- 交互事件 ---
+  canvas.addEventListener('pointerdown', function(e) {
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    // 1. 点击开关
+    if (Math.abs(mx - swBox.x) < 20 && Math.abs(my - swBox.y) < 20) {
+      isClosed = !isClosed; document.getElementById('switchToggle').checked = isClosed; return;
+    }
+
+    // 2. 拖拽变阻器
+    if (mx > sliderBox.x - 20 && mx < sliderBox.x + sliderBox.w + 20 && my > sliderBox.y - 20 && my < sliderBox.y + 20) {
+      isDragging = true;
+    }
+  });
+
+  canvas.addEventListener('pointermove', function(e) {
+    if (!isDragging) return;
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var ratio = (mx - sliderBox.x) / sliderBox.w;
+    Rv = Math.round(Math.max(0, Math.min(1, ratio)) * 20); // 0~20欧
+  });
+
+  canvas.addEventListener('pointerup', () => isDragging = false);
+  canvas.addEventListener('pointerleave', () => isDragging = false);
+
+  // --- 侧边栏控制 ---
+  document.getElementById('switchToggle').addEventListener('change', function(e) { 
+    isClosed = e.target.checked; 
+    if(!isClosed) pins.forEach(p => p.grounded = false);
+  });
+  document.getElementById('flipBtn').addEventListener('click', function() { direction *= -1; });
+  document.getElementById('uRange').addEventListener('input', function(e) { U = parseFloat(e.target.value); document.getElementById('uVal').textContent = U.toFixed(1); });
+  document.getElementById('nSel').addEventListener('change', function(e) { N = parseInt(e.target.value); });
+
+  window.addEventListener('resize', resize);
+  resize(); draw();
+})();
+</script>
+</body>
+</html>
