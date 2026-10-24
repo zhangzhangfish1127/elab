@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>水中鱼虚像 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 专门针对控制面板里的小按钮和滑块 */
+  .angle-btn {
+    background: #f1f5f9; border: 1px solid #cbd5e1;
+    color: #475569; padding: 2px 10px; border-radius: 6px;
+    font-weight: bold; cursor: pointer; transition: 0.15s;
+  }
+  .angle-btn:hover { background: #e2e8f0; color: #1e293b; }
+  .angle-btn:active { transform: scale(0.95); }
+  
+  .value-badge {
+    background: #e0f2fe; color: #0284c7;
+    padding: 2px 8px; border-radius: 12px;
+    font-size: 13px; font-weight: bold; text-align: center;
+  }
+  
+  .legend-box {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+    font-size: 12px; padding: 10px; background: #f8fafc;
+    border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 12px;
+  }
+  .legend-box span { display: flex; align-items: center; gap: 4px; color: #475569;}
+  .legend-box .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.2); }
+  
+  .warning-banner {
+    background: #ef4444; color: #fff; font-weight: bold;
+    padding: 4px 12px; border-radius: 16px; font-size: 13px;
+    display: inline-block; text-align: center; animation: blink 1s infinite;
+  }
+  @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>水中鱼虚像与全反射</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <h3>控制面板</h3>
+  
+  <div class="row" style="margin-bottom:12px; align-items:flex-start;">
+    <label style="margin:0; white-space:nowrap; width:60px;">折射率</label>
+    <div style="flex:1;">
+      <input type="range" id="n1Slider" min="1.00" max="2.00" step="0.01" value="1.33" style="width:100%;">
+      <div style="text-align:right;"><span class="value-badge" id="n1Value">1.33</span></div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-bottom:12px; align-items:flex-start;">
+    <label style="margin:0; white-space:nowrap; width:60px;">夹角</label>
+    <div style="flex:1;">
+      <div style="display:flex; gap:4px; margin-bottom:4px;">
+        <button class="angle-btn" id="angleDecBtn">−</button>
+        <button class="angle-btn" id="angleIncBtn" style="flex:1;">+</button>
+        <span class="value-badge" id="angleDisplay">45.0°</span>
+      </div>
+      <input type="range" id="angleSlider" min="2" max="170" step="0.5" value="45" style="width:100%;">
+    </div>
+  </div>
+
+  <div class="row" style="margin-bottom:12px;">
+    <label style="margin:0; white-space:nowrap; width:60px;">模式</label>
+    <select id="modeSelect" style="flex:1;">
+      <option value="symmetric">对称</option>
+      <option value="fixA">固定 A</option>
+      <option value="fixB" selected>固定 B (人眼)</option>
+    </select>
+  </div>
+
+  <button class="secondary" id="resetBtn" style="margin-top:8px;">↺ 复位</button>
+
+  <div class="legend-box">
+    <span><span class="dot" style="background:#f59e0b;"></span> 鱼</span>
+    <span><span class="dot" style="background:#0ea5e9;border:1px dashed #0ea5e9;"></span> 虚像</span>
+    <span><span class="dot" style="background:#ef4444;"></span> 入射光</span>
+    <span><span class="dot" style="background:#10b981;"></span> 折射光</span>
+    <span><span class="dot" style="background:#a855f7;border:1px dashed #a855f7;"></span> 延长线</span>
+    <span style="color:#d97706; font-weight:bold;">👀 人眼</span>
+  </div>
+
+  <div id="warningContainer" style="text-align:center; margin-top:12px; min-height:28px;"></div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage" style="padding:0; overflow:hidden;">
+    <!-- 注意：宽高保留了绝对比例，CSS中自适应 -->
+    <canvas id="canvas" width="800" height="600" style="width:100%; height:auto; aspect-ratio:800/600; display:block; cursor:grab;"></canvas>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish · <a href="../about.html">简介</a> · <a href="../feedback.html">反馈</a> · <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function() {
+  if(window.App) App.injectTopbar();
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 600;
+  const WATER_Y = 300;
+  const NORMAL_X = 300;
+  const CENTER_X = 450;
+
+  let fish = { x: 400, y: 460 };
+  let pointA = { x: 350, y: WATER_Y };
+  let pointB = { x: 550, y: WATER_Y };
+  let n1 = 1.33;
+  const n2 = 1.0;
+
+  let mode = 'fixB';
+  let dragTarget = null;
+  let dragOffset = { x: 0, y: 0 };
+
+  const n1Slider = document.getElementById('n1Slider');
+  const n1Value = document.getElementById('n1Value');
+  const resetBtn = document.getElementById('resetBtn');
+  const angleDisplay = document.getElementById('angleDisplay');
+  const angleDecBtn = document.getElementById('angleDecBtn');
+  const angleIncBtn = document.getElementById('angleIncBtn');
+  const angleSlider = document.getElementById('angleSlider');
+  const modeSelect = document.getElementById('modeSelect');
+  const warningContainer = document.getElementById('warningContainer');
+
+  modeSelect.value = 'fixB';
+
+  function dist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
+
+  function refractDirection(P, I, n1, n2) {
+    const dx = I.x - P.x;
+    const dy = I.y - P.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return null;
+    const sinTheta1 = Math.abs(dx) / len;
+    const cosTheta1 = Math.abs(dy) / len;
+    const ratio = n1 / n2;
+    const sinTheta2 = ratio * sinTheta1;
+    if (sinTheta2 > 1.0) return null;
+    const cosTheta2 = Math.sqrt(1 - sinTheta2 * sinTheta2);
+    const dirX = dx > 0 ? 1 : -1;
+    return { x: dirX * sinTheta2, y: -cosTheta2 };
+  }
+
+  function lineIntersection(P1, D1, P2, D2) {
+    const det = D1.x * D2.y - D1.y * D2.x;
+    if (Math.abs(det) < 1e-12) return null;
+    const t = ((P2.x - P1.x) * D2.y - (P2.y - P1.y) * D2.x) / det;
+    return { x: P1.x + t * D1.x, y: P1.y + t * D1.y, t: t };
+  }
+
+  function computeVirtualImage(P, A, B, n1, n2) {
+    const dirA = refractDirection(P, A, n1, n2);
+    const dirB = refractDirection(P, B, n1, n2);
+    if (!dirA || !dirB) return null;
+    const D1 = { x: -dirA.x, y: -dirA.y };
+    const D2 = { x: -dirB.x, y: -dirB.y };
+    const inter = lineIntersection(A, D1, B, D2);
+    if (!inter) return null;
+    if (inter.y < WATER_Y || inter.t < 0) return null;
+    return inter;
+  }
+
+  function getCurrentAngle() {
+    const v1 = { x: pointA.x - fish.x, y: pointA.y - fish.y };
+    const v2 = { x: pointB.x - fish.x, y: pointB.y - fish.y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const mag1 = Math.hypot(v1.x, v1.y), mag2 = Math.hypot(v2.x, v2.y);
+    if (mag1 < 1 || mag2 < 1) return 0;
+    const angleRad = Math.acos(Math.min(1, Math.max(-1, dot / (mag1 * mag2))));
+    return angleRad * 180 / Math.PI;
+  }
+
+  function setAngle(targetDeg) {
+    targetDeg = Math.min(170, Math.max(2, targetDeg));
+    const P = fish;
+    const depth = P.y - WATER_Y;
+    if (depth < 10) return;
+
+    if (mode === 'symmetric') {
+      let d = depth * Math.tan(targetDeg / 2 * Math.PI / 180);
+      let newA = CENTER_X - d, newB = CENTER_X + d;
+      if (newA < 5) { newA = 5; newB = CENTER_X + (CENTER_X - newA); }
+      if (newB > W - 5) { newB = W - 5; newA = CENTER_X - (newB - CENTER_X); }
+      pointA.x = newA; pointB.x = newB;
+    } else if (mode === 'fixA') {
+      const currentB = pointB.x;
+      let lo = Math.max(5, currentB - 200), hi = Math.min(W - 5, currentB + 200), best = currentB;
+      for (let i = 0; i < 40; i++) {
+        let mid = (lo + hi) / 2;
+        let v1 = { x: pointA.x - P.x, y: pointA.y - P.y };
+        let v2 = { x: mid - P.x, y: WATER_Y - P.y };
+        let dot = v1.x * v2.x + v1.y * v2.y;
+        let mag1 = Math.hypot(v1.x, v1.y), mag2 = Math.hypot(v2.x, v2.y);
+        let angle = 0;
+        if (mag1 > 1 && mag2 > 1) angle = Math.acos(Math.min(1, Math.max(-1, dot / (mag1 * mag2)))) * 180 / Math.PI;
+        if (angle < targetDeg) lo = mid; else hi = mid;
+        best = mid;
+        if (Math.abs(angle - targetDeg) < 0.1) break;
+        if (hi - lo < 0.5) break;
+      }
+      let newBx = Math.min(W - 5, Math.max(5, best));
+      if (Math.abs(newBx - pointA.x) < 15) newBx = (newBx > pointA.x) ? pointA.x + 25 : pointA.x - 25;
+      pointB.x = Math.min(W - 5, Math.max(5, newBx));
+    } else if (mode === 'fixB') {
+      const currentA = pointA.x;
+      let lo = Math.max(5, currentA - 200), hi = Math.min(W - 5, currentA + 200), best = currentA;
+      for (let i = 0; i < 40; i++) {
+        let mid = (lo + hi) / 2;
+        let v1 = { x: mid - P.x, y: WATER_Y - P.y };
+        let v2 = { x: pointB.x - P.x, y: pointB.y - P.y };
+        let dot = v1.x * v2.x + v1.y * v2.y;
+        let mag1 = Math.hypot(v1.x, v1.y), mag2 = Math.hypot(v2.x, v2.y);
+        let angle = 0;
+        if (mag1 > 1 && mag2 > 1) angle = Math.acos(Math.min(1, Math.max(-1, dot / (mag1 * mag2)))) * 180 / Math.PI;
+        if (angle < targetDeg) lo = mid; else hi = mid;
+        best = mid;
+        if (Math.abs(angle - targetDeg) < 0.1) break;
+        if (hi - lo < 0.5) break;
+      }
+      let newAx = Math.min(W - 5, Math.max(5, best));
+      if (Math.abs(newAx - pointB.x) < 15) newAx = (newAx < pointB.x) ? pointB.x - 25 : pointB.x + 25;
+      pointA.x = Math.min(W - 5, Math.max(5, newAx));
+    }
+    pointA.y = WATER_Y; pointB.y = WATER_Y;
+    draw();
+  }
+
+  function adjustAngle(deltaDeg) {
+    let target = getCurrentAngle() + deltaDeg;
+    setAngle(Math.min(170, Math.max(2, target)));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // 空气 (浅蓝渐变)
+    const gradAir = ctx.createLinearGradient(0, 0, 0, WATER_Y);
+    gradAir.addColorStop(0, '#e0f2fe'); gradAir.addColorStop(1, '#bae6fd');
+    ctx.fillStyle = gradAir; ctx.fillRect(0, 0, W, WATER_Y);
+
+    // 水 (纯白/浅灰)
+    const gradWater = ctx.createLinearGradient(0, WATER_Y, 0, H);
+    gradWater.addColorStop(0, '#f8fafc'); gradWater.addColorStop(1, '#f1f5f9');
+    ctx.fillStyle = gradWater; ctx.fillRect(0, WATER_Y, W, H - WATER_Y);
+
+    // 水面
+    ctx.beginPath(); ctx.moveTo(0, WATER_Y); ctx.lineTo(W, WATER_Y);
+    ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 3; ctx.shadowColor = '#0ea5e9'; ctx.shadowBlur = 8;
+    ctx.stroke(); ctx.shadowBlur = 0;
+
+    // 法线
+    ctx.beginPath(); ctx.setLineDash([6, 8]); ctx.moveTo(NORMAL_X, 0); ctx.lineTo(NORMAL_X, H);
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif';
+    ctx.fillText('法线(参考)', NORMAL_X - 28, 20);
+
+    // 鱼垂直线
+    ctx.beginPath(); ctx.setLineDash([4, 6]); ctx.moveTo(fish.x, fish.y); ctx.lineTo(fish.x, WATER_Y);
+    ctx.strokeStyle = 'rgba(217,119,6,0.4)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(217,119,6,0.6)'; ctx.font = '10px sans-serif';
+    ctx.fillText('鱼垂直线', fish.x + 4, (fish.y + WATER_Y) / 2 + 3);
+
+    // 底部网格
+    ctx.strokeStyle = 'rgba(0,0,0,0.03)'; ctx.lineWidth = 1;
+    for (let y = WATER_Y + 40; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, WATER_Y); ctx.lineTo(x, H); ctx.stroke(); }
+
+    // 物理计算
+    const dirA = refractDirection(fish, pointA, n1, n2);
+    const dirB = refractDirection(fish, pointB, n1, n2);
+    const virtual = computeVirtualImage(fish, pointA, pointB, n1, n2);
+    const hasRefraction = (dirA !== null && dirB !== null);
+    const hasVirtual = (virtual !== null && virtual.y > WATER_Y);
+
+    let warningHtml = '';
+    if (!hasRefraction || !hasVirtual) warningHtml = '<span class="warning-banner">⚠️ 全反射 / 无虚像</span>';
+    warningContainer.innerHTML = warningHtml;
+
+    // 入射光
+    ctx.beginPath(); ctx.moveTo(fish.x, fish.y); ctx.lineTo(pointA.x, pointA.y);
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fish.x, fish.y); ctx.lineTo(pointB.x, pointB.y); ctx.stroke(); ctx.shadowBlur = 0;
+
+    // 折射光与眼睛
+    let eyePos = null;
+    if (dirB) {
+      const eyeDist = 200;
+      eyePos = { x: pointB.x + dirB.x * eyeDist, y: pointB.y + dirB.y * eyeDist };
+      ctx.beginPath(); ctx.moveTo(pointB.x, pointB.y); ctx.lineTo(eyePos.x, eyePos.y);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3.5; ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+      
+      ctx.font = '28px sans-serif'; ctx.fillStyle = '#d97706'; ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = 5;
+      ctx.fillText('👀', eyePos.x - 18, eyePos.y + 10); ctx.shadowBlur = 0;
+      ctx.fillStyle = '#b45309'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('人眼', eyePos.x - 14, eyePos.y - 18);
+    }
+    if (dirA) {
+      const endA_x = pointA.x + dirA.x * 300, endA_y = pointA.y + dirA.y * 300;
+      ctx.beginPath(); ctx.moveTo(pointA.x, pointA.y); ctx.lineTo(endA_x, endA_y);
+      ctx.strokeStyle = '#10b981'; ctx.lineWidth = 3; ctx.shadowColor = '#10b981'; ctx.shadowBlur = 6; ctx.stroke(); ctx.shadowBlur = 0;
+    } else {
+      ctx.beginPath(); ctx.arc(pointA.x, pointA.y, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ef4444'; ctx.shadowBlur = 16; ctx.shadowColor = '#ef4444'; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('⚠️', pointA.x - 10, pointA.y - 16);
+    }
+    if (!dirB) {
+      ctx.beginPath(); ctx.arc(pointB.x, pointB.y, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ef4444'; ctx.shadowBlur = 16; ctx.shadowColor = '#ef4444'; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('⚠️', pointB.x - 10, pointB.y - 16);
+    }
+
+    // 延长线
+    if (dirA && hasRefraction) {
+      ctx.beginPath(); ctx.setLineDash([6, 8]); ctx.moveTo(pointA.x, pointA.y); ctx.lineTo(pointA.x - dirA.x * 350, pointA.y - dirA.y * 350);
+      ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 2; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 4; ctx.stroke();
+      ctx.setLineDash([]); ctx.shadowBlur = 0;
+    }
+    if (dirB && hasRefraction) {
+      ctx.beginPath(); ctx.setLineDash([6, 8]); ctx.moveTo(pointB.x, pointB.y); ctx.lineTo(pointB.x - dirB.x * 350, pointB.y - dirB.y * 350);
+      ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 2; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 4; ctx.stroke();
+      ctx.setLineDash([]); ctx.shadowBlur = 0;
+    }
+
+    // 虚像
+    if (hasVirtual) {
+      ctx.save(); ctx.translate(virtual.x, virtual.y); ctx.scale(1.2, 1.2);
+      ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 3; ctx.setLineDash([4, 6]);
+      ctx.shadowColor = '#0ea5e9'; ctx.shadowBlur = 15;
+      ctx.beginPath(); ctx.ellipse(0, 0, 22, 14, 0, 0, 2 * Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-22, 0); ctx.lineTo(-34, -12); ctx.lineTo(-34, 12); ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(10, -4, 3, 0, 2 * Math.PI); ctx.stroke();
+      ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.restore();
+
+      ctx.fillStyle = '#0ea5e9'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('✨ 虚像', virtual.x + 28, virtual.y - 12);
+      ctx.fillStyle = '#64748b'; ctx.font = '12px monospace';
+      ctx.fillText(`(${virtual.x.toFixed(1)}, ${virtual.y.toFixed(1)})`, virtual.x + 28, virtual.y + 8);
+
+      const realDepth = (WATER_Y - fish.y).toFixed(0), imgDepth = (WATER_Y - virtual.y).toFixed(0);
+      ctx.fillStyle = '#334155'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(`视深: ${imgDepth} px (实际深: ${realDepth} px)`, 20, 40);
+    } else {
+      ctx.fillStyle = '#ef4444'; ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('⚠️ 无虚像', 20, 40);
+    }
+
+    // 鱼
+    ctx.save(); ctx.translate(fish.x, fish.y);
+    ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 20;
+    ctx.fillStyle = '#fcd34d'; ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, 0, 24, 15, 0, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.moveTo(-24, 0); ctx.lineTo(-38, -14); ctx.lineTo(-38, 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(12, -4, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(14, -6, 1.5, 0, 2 * Math.PI); ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
+
+    ctx.fillStyle = '#d97706'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('🐠 实际鱼 (可拖拽)', fish.x + 30, fish.y - 10);
+
+    // 节点 A 和 B
+    [pointA, pointB].forEach((pt, i) => {
+      ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(pt.x, pt.y, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = '#38bdf8'; ctx.shadowColor = '#38bdf8'; ctx.fill();
+      ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#0369a1'; ctx.font = 'bold 14px sans-serif'; ctx.shadowBlur = 0;
+      ctx.fillText(i === 0 ? 'A' : 'B', pt.x - 8, pt.y + (i === 0 ? -18 : 28));
+    });
+
+    // 状态文本
+    const currentAngle = getCurrentAngle();
+    angleDisplay.textContent = currentAngle.toFixed(1) + '°';
+    angleSlider.value = Math.min(170, Math.max(2, currentAngle));
+
+    let modeText = { symmetric: '对称', fixA: '固定 A', fixB: '固定 B' }[mode] || '';
+    ctx.fillStyle = '#334155'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(`模式: ${modeText}`, 20, 95);
+    ctx.fillText(`夹角: ${currentAngle.toFixed(1)}°`, 20, 70);
+  }
+
+  // --- 交互 ---
+  function handleStart(e) {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const mx = (clientX - rect.left) * scaleX, my = (clientY - rect.top) * scaleY;
+
+    if (dist({x: mx, y: my}, fish) < 30) {
+      dragTarget = 'fish'; dragOffset = { x: fish.x - mx, y: fish.y - my }; return;
+    }
+    if (dist({x: mx, y: my}, pointA) < 25) { dragTarget = 'A'; return; }
+    if (dist({x: mx, y: my}, pointB) < 25) { dragTarget = 'B'; return; }
+  }
+
+  function handleMove(e) {
+    e.preventDefault();
+    if (!dragTarget) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    let mx = (clientX - rect.left) * scaleX, my = (clientY - rect.top) * scaleY;
+    mx = Math.min(W, Math.max(0, mx)); my = Math.min(H, Math.max(0, my));
+
+    if (dragTarget === 'fish') {
+      fish.x = Math.min(W - 10, Math.max(10, mx + dragOffset.x));
+      fish.y = Math.min(H - 10, Math.max(WATER_Y + 20, my + dragOffset.y));
+    } else if (dragTarget === 'A') {
+      pointA.x = Math.min(W - 5, Math.max(5, mx));
+      if (Math.abs(pointA.x - pointB.x) < 10) pointA.x = pointA.x < pointB.x ? pointB.x - 20 : pointB.x + 20;
+    } else if (dragTarget === 'B') {
+      pointB.x = Math.min(W - 5, Math.max(5, mx));
+      if (Math.abs(pointA.x - pointB.x) < 10) pointB.x = pointB.x > pointA.x ? pointA.x + 20 : pointA.x - 20;
+    }
+    draw();
+  }
+
+  function handleEnd() { dragTarget = null; }
+
+  canvas.addEventListener('mousedown', handleStart);
+  window.addEventListener('mousemove', handleMove);
+  window.addEventListener('mouseup', handleEnd);
+  canvas.addEventListener('touchstart', handleStart, { passive: false });
+  window.addEventListener('touchmove', handleMove, { passive: false });
+  window.addEventListener('touchend', handleEnd, { passive: false });
+
+  // 控件绑定
+  n1Slider.addEventListener('input', function() { n1 = parseFloat(this.value); n1Value.textContent = n1.toFixed(2); draw(); });
+  modeSelect.addEventListener('change', function() { mode = this.value; draw(); });
+  angleIncBtn.addEventListener('click', () => adjustAngle(2));
+  angleDecBtn.addEventListener('click', () => adjustAngle(-2));
+  angleSlider.addEventListener('input', function() { setAngle(parseFloat(this.value)); });
+  resetBtn.addEventListener('click', () => {
+    fish = { x: 400, y: 460 }; pointA = { x: 350, y: WATER_Y }; pointB = { x: 550, y: WATER_Y };
+    n1 = 1.33; n1Slider.value = '1.33'; n1Value.textContent = '1.33';
+    mode = 'fixB'; modeSelect.value = 'fixB'; draw();
+  });
+
+  draw();
+  window.addEventListener('resize', draw);
+})();
+</script>
+</body>
+</html>
