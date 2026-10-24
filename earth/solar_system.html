@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>太阳系星际追踪 - 修复防白屏版</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overscroll-behavior: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 260px;
+            background: rgba(20, 25, 35, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            color: #fff;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+        .panel h2 {
+            font-size: 16px;
+            margin: 0 0 15px 0;
+            text-align: center;
+            color: #60a5fa;
+        }
+        .control-item {
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+        .control-item input[type="range"] {
+            width: 120px;
+        }
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 12px;
+            z-index: 10;
+        }
+    </style>
+    <!-- 引入 Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="panel">
+        <h2>太阳系星际追踪</h2>
+        <div class="control-item">
+            <label>播放公转</label>
+            <input type="checkbox" id="play-toggle" checked>
+        </div>
+        <div class="control-item">
+            <label>显示轨道线</label>
+            <input type="checkbox" id="orbit-toggle" checked>
+        </div>
+        <div class="control-item">
+            <label>距离比例</label>
+            <input type="range" id="distance-slider" min="10" max="100" value="40">
+        </div>
+        <div class="control-item">
+            <label>天体大小</label>
+            <input type="range" id="size-slider" min="0.5" max="5" step="0.1" value="1">
+        </div>
+        <div class="control-item">
+            <label>动画速度</label>
+            <input type="range" id="speed-slider" min="0" max="5" step="0.1" value="1">
+        </div>
+        <button id="btn-reset">回正视角</button>
+    </div>
+
+    <div class="info">拖动平移 · 双指缩放</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ================= 1. 基础场景初始化 =================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // 添加星空背景
+        scene.background = new THREE.Color(0x000005);
+
+        // 降低抗锯齿以减轻 iPad GPU 压力
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制像素比防止 iPad 过热崩溃
+        container.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
+        camera.position.set(0, 50, 150);
+
+        // ================= 2. iPad 防崩溃 & 触摸接管核心补丁 =================
+        const canvas = renderer.domElement;
+        canvas.style.touchAction = 'none'; // 禁用默认触摸手势
+        
+        // 拦截 WebGL 上下文丢失
+        canvas.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            console.warn('WebGL Context Lost Prevented');
+        }, false);
+
+        // 强制接管触摸事件，防止 Safari 把网页放大
+        const blockTouch = (e) => { if(e.cancelable) e.preventDefault(); };
+        canvas.addEventListener('touchstart', blockTouch, { passive: false });
+        canvas.addEventListener('touchmove', blockTouch, { passive: false });
+
+        // ================= 3. 控制器 =================
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 1000;
+        controls.minDistance = 10;
+
+        // ================= 4. 光照 =================
+        const ambientLight = new THREE.AmbientLight(0x333333);
+        scene.add(ambientLight);
+        
+        const sunLight = new THREE.PointLight(0xffffff, 3, 0, 0);
+        scene.add(sunLight);
+
+        // ================= 5. 核心数据与天体生成 =================
+        // 为了方便演示，行星大小和距离做了视觉压缩（非真实比例）
+        const planetsData = [
+            { name: '水星', color: 0xaaaaaa, size: 0.8, distance: 12, speed: 4.1 },
+            { name: '金星', color: 0xffcc00, size: 1.2, distance: 18, speed: 1.6 },
+            { name: '地球', color: 0x2288ff, size: 1.3, distance: 25, speed: 1.0 },
+            { name: '火星', color: 0xff4400, size: 1.0, distance: 33, speed: 0.5 },
+            { name: '木星', color: 0xffaa88, size: 3.5, distance: 50, speed: 0.08 },
+            { name: '土星', color: 0xeeddbb, size: 3.0, distance: 68, speed: 0.03, hasRing: true },
+            { name: '天王星', color: 0x88ddff, size: 2.0, distance: 85, speed: 0.01 },
+            { name: '海王星', color: 0x4444ff, size: 2.0, distance: 100, speed: 0.006 }
+        ];
+
+        const planets = [];
+        const orbits = [];
+        
+        // 太阳
+        const sunGeo = new THREE.SphereGeometry(6, 32, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        scene.add(sun);
+
+        // 创建行星
+        planetsData.forEach(data => {
+            // 行星本体
+            const geo = new THREE.SphereGeometry(data.size, 32, 32);
+            const mat = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.5, metalness: 0.2 });
+            const mesh = new THREE.Mesh(geo, mat);
+            scene.add(mesh);
+
+            // 土星环
+            if (data.hasRing) {
+                const ringGeo = new THREE.RingGeometry(data.size * 1.4, data.size * 2.2, 64);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0xccbbaa, side: THREE.DoubleSide, transparent: true, opacity: 0.7 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2.5;
+                mesh.add(ring);
+            }
+
+            // 轨道线
+            const points = [];
+            const segments = 128;
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                points.push(new THREE.Vector3(Math.cos(angle) * data.distance, 0, Math.sin(angle) * data.distance));
+            }
+            const orbitGeo = new THREE.BufferGeometry().setFromPoints(points);
+            const orbitMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15 });
+            const orbitLine = new THREE.LineLoop(orbitGeo, orbitMat);
+            scene.add(orbitLine);
+            orbits.push(orbitLine);
+
+            planets.push({
+                mesh: mesh,
+                data: data,
+                angle: Math.random() * Math.PI * 2,
+                baseDistance: data.distance
+            });
+        });
+
+        // 添加哈雷彗星 (超长椭圆轨道)
+        const cometGeo = new THREE.SphereGeometry(0.6, 16, 16);
+        const cometMat = new THREE.MeshBasicMaterial({ color: 0x88ccff });
+        const comet = new THREE.Mesh(cometGeo, cometMat);
+        scene.add(comet);
+        
+        // 彗星轨迹 (模拟椭圆)
+        const cometPathPoints = [];
+        for(let i=0; i<=360; i++) {
+            const a = i * Math.PI / 180;
+            const r = 80 / (1 + 0.8 * Math.cos(a)); // 极坐标下椭圆方程
+            cometPathPoints.push(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+        }
+        const cometOrbitGeo = new THREE.BufferGeometry().setFromPoints(cometPathPoints);
+        const cometOrbitMat = new THREE.LineBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.3 });
+        const cometOrbit = new THREE.LineLoop(cometOrbitGeo, cometOrbitMat);
+        scene.add(cometOrbit);
+        orbits.push(cometOrbit);
+        let cometAngle = 0;
+
+        // ================= 6. UI 交互逻辑 =================
+        let isPlaying = true;
+        let speedMultiplier = 1;
+        let distanceMultiplier = 1;
+        let sizeMultiplier = 1;
+
+        document.getElementById('play-toggle').addEventListener('change', (e) => { isPlaying = e.target.checked; });
+        document.getElementById('orbit-toggle').addEventListener('change', (e) => {
+            orbits.forEach(o => o.visible = e.target.checked);
+        });
+        document.getElementById('distance-slider').addEventListener('input', (e) => {
+            distanceMultiplier = e.target.value / 40; // 基准值40
+        });
+        document.getElementById('size-slider').addEventListener('input', (e) => {
+            sizeMultiplier = parseFloat(e.target.value);
+            planets.forEach(p => p.mesh.scale.setScalar(sizeMultiplier));
+            comet.scale.setScalar(sizeMultiplier);
+        });
+        document.getElementById('speed-slider').addEventListener('input', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+        });
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            controls.target.set(0,0,0);
+            camera.position.set(0, 50, 150);
+            controls.update();
+        });
+
+        // ================= 7. 动画循环 =================
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            
+            if (isPlaying) {
+                // 太阳自转
+                sun.rotation.y += 0.001 * speedMultiplier;
+
+                // 行星公转与自转
+                planets.forEach(p => {
+                    p.angle += delta * p.data.speed * 0.5 * speedMultiplier;
+                    const currentDistance = p.baseDistance * distanceMultiplier;
+                    
+                    p.mesh.position.x = Math.cos(p.angle) * currentDistance;
+                    p.mesh.position.z = Math.sin(p.angle) * currentDistance;
+                    p.mesh.rotation.y += 0.01 * speedMultiplier;
+
+                    // 动态更新轨道线大小
+                    p.mesh.scale.setScalar(sizeMultiplier); 
+                });
+
+                // 彗星运动 (速度较快)
+                cometAngle += delta * 0.8 * speedMultiplier;
+                const r = 80 / (1 + 0.8 * Math.cos(cometAngle));
+                comet.position.x = Math.cos(cometAngle) * r * distanceMultiplier;
+                comet.position.z = Math.sin(cometAngle) * r * distanceMultiplier;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // 窗口缩放适配
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 启动动画
+        animate();
+
+    </script>
+</body>
+</html>
