@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>欧姆定律 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 局部样式优化表单和表格 */
+  .lab-side input[type="number"], 
+  .lab-side input[type="color"], 
+  .lab-side select {
+    width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; margin-top: 4px;
+  }
+  .two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  
+  .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 8px; cursor: pointer; color: #555; }
+  .checkbox-row input { width: 16px; height: 16px; margin: 0; }
+  
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .btn-secondary { background: #ecf0f1; color: #2c3e50; border: 1px solid #ddd; }
+  
+  /* 画布容器 */
+  .canvas-wrap { position: relative; width: 100%; height: 400px; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; border-radius: 8px;}
+  
+  /* 悬浮提示 */
+  .tooltip {
+    position: absolute; z-index: 5; display: none; min-width: 140px; padding: 8px;
+    color: #fff; border-radius: 6px; background: rgba(15, 23, 42, 0.9);
+    font-size: 12px; line-height: 1.5; pointer-events: none;
+  }
+  .tooltip strong { color: #93c5fd; }
+  
+  /* 状态栏 */
+  .status-box {
+    margin-top: 10px; padding: 8px 12px; border-radius: 6px;
+    color: #334155; background: #f1f5f9; font-size: 13px; border-left: 4px solid #2563eb;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .status-box.error { color: #991b1b; background: #fef2f2; border-left-color: #dc2626; }
+  .status-icon { background: #2563eb; color: #fff; width: 16px; height: 16px; border-radius: 50%; text-align: center; line-height: 16px; font-weight: bold; font-size: 12px; }
+  .status-box.error .status-icon { background: #dc2626; }
+
+  /* 数据表格 */
+  .data-table-wrap { max-height: 300px; overflow-y: auto; margin-top: 16px; background: #fff; border-radius: 8px; border: 1px solid #eee;}
+  .data-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table-wrap th, .data-table-wrap td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: right; }
+  .data-table-wrap th { background: #f8fafc; position: sticky; top: 0; font-weight: bold; color: #334155; z-index: 1;}
+  .data-table-wrap th:first-child, .data-table-wrap td:first-child { text-align: center; }
+  
+  .quick-buttons { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .quick-button { padding: 2px 6px; font-size: 12px; background: #fff; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
+  .quick-button:hover { color: #2563eb; border-color: #2563eb; }
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>欧姆定律</h1>
+
+<div class="lab">
+<aside class="lab-side">
+  <h3>控制面板</h3>
+  
+  <div class="row" style="margin-bottom:8px;">
+    <label style="width:50px;">横轴</label>
+    <select id="xVariable" style="flex:1;">
+      <option value="I">电流 I（A）</option>
+      <option value="U">电压 U（V）</option>
+      <option value="R">电阻 R（Ω）</option>
+    </select>
+  </div>
+  <div class="row" style="margin-bottom:12px;">
+    <label style="width:50px;">纵轴</label>
+    <select id="yVariable" style="flex:1;">
+      <option value="U">电压 U（V）</option>
+      <option value="I">电流 I（A）</option>
+      <option value="R">电阻 R（Ω）</option>
+    </select>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+
+  <label style="font-weight:bold; color:#2c3e50;">
+    <span id="fixedLabel">固定电阻</span> 
+    <span id="fixedSymbol" style="display:none;">R</span>
+  </label>
+  <div class="input-with-unit" style="display:flex; align-items:center; gap:8px;">
+    <input id="fixedValue" type="number" value="10" min="0.000001" step="any" />
+    <span id="fixedUnit" style="font-size:14px; color:#555;">Ω</span>
+  </div>
+  <div class="quick-buttons" id="quickButtons"></div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+
+  <div style="font-size:13px; color:#666; margin-bottom:6px;">横轴范围</div>
+  <div class="two-columns" style="margin-bottom:8px;">
+    <div><label>Min</label><input id="xMin" type="number" value="0" step="any" /></div>
+    <div><label>Max</label><input id="xMax" type="number" value="5" step="any" /></div>
+  </div>
+  <div><label>采样点数</label><input id="sampleCount" type="number" value="101" min="20" max="500" step="1" /></div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+
+  <div class="checkbox-row">
+    <input id="autoY" type="checkbox" checked />
+    <label for="autoY" style="margin:0; cursor:pointer;">自动计算纵轴范围</label>
+  </div>
+  <div class="two-columns" style="margin-bottom:12px;">
+    <div><label>Y Min</label><input id="yMin" type="number" value="0" step="any" disabled /></div>
+    <div><label>Y Max</label><input id="yMax" type="number" value="50" step="any" disabled /></div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+
+  <div class="row" style="margin-bottom:8px;">
+    <label>颜色</label>
+    <input id="lineColor" type="color" value="#2563eb" style="flex:1; padding:2px;" />
+  </div>
+  <div class="checkbox-row">
+    <input id="showPoints" type="checkbox" />
+    <label for="showPoints" style="margin:0; cursor:pointer;">显示采样点</label>
+  </div>
+  <div class="checkbox-row">
+    <input id="showGrid" type="checkbox" checked />
+    <label for="showGrid" style="margin:0; cursor:pointer;">显示网格</label>
+  </div>
+
+  <div class="btn-row">
+    <button id="drawButton" style="margin-bottom:0;">重新绘制</button>
+    <button id="resetButton" class="secondary" style="margin-bottom:0;">恢复默认</button>
+  </div>
+  
+  <div style="font-size:12px; color:#e74c3c; margin-top:12px; font-weight:bold; text-align:center;">
+    👉 在左侧画布中拖动蓝色滑片
+  </div>
+</aside>
+
+<main class="lab-main">
+  <div class="stage" style="padding-bottom:0;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px;">
+      <div>
+        <div style="font-size:18px; font-weight:bold; color:#2c3e50;" id="chartTitle">电压随电流变化曲线</div>
+        <div style="font-size:13px; color:#666; margin-top:4px;" id="chartSubtitle">固定电阻 R = 10 Ω</div>
+      </div>
+      <div style="font-size:13px; font-weight:bold; color:#475569; display:flex; align-items:center; gap:6px;">
+        <span class="legend-line" id="legendLine" style="display:inline-block; width:20px; height:4px; border-radius:2px; background:#2563eb;"></span>
+        <span id="legendText">曲线</span>
+      </div>
+    </div>
+    
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="chartCanvas"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+    
+    <div class="status-box" id="statusBox">
+      <span class="status-icon">i</span>
+      <span id="statusText">拖动左侧变阻器，曲线和表格会实时更新。</span>
+    </div>
+  </div>
+
+  <div class="data-table-wrap">
+    <table>
+      <thead><tr><th>序号</th><th id="tableXHeader">电流 I（A）</th><th id="tableYHeader">电压 U（V）</th></tr></thead>
+      <tbody id="dataTableBody"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+
+<div class="site-footer">
+  作者：zhangzhangfish · <a href="../about.html">简介</a> · <a href="../feedback.html">反馈</a> · <a href="../support.html">支持我们</a>
+</div>
+
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+
+  const variableInfo = {
+    U: { name: "电压", symbol: "U", unit: "V" },
+    I: { name: "电流", symbol: "I", unit: "A" },
+    R: { name: "电阻", symbol: "R", unit: "Ω" }
+  };
+  const presets = { U: [1.5, 5, 12, 24], I: [0.1, 0.5, 1, 2], R: [1, 5, 10, 20] };
+  const defaultRanges = { I: [0, 5], U: [0, 50], R: [1, 100] };
+
+  const el = {
+    xVar: document.getElementById("xVariable"), yVar: document.getElementById("yVariable"),
+    fixedValue: document.getElementById("fixedValue"), fixedLabel: document.getElementById("fixedLabel"), fixedUnit: document.getElementById("fixedUnit"), quickBtns: document.getElementById("quickButtons"),
+    xMin: document.getElementById("xMin"), xMax: document.getElementById("xMax"), sampleCount: document.getElementById("sampleCount"),
+    yMin: document.getElementById("yMin"), yMax: document.getElementById("yMax"), autoY: document.getElementById("autoY"),
+    lineColor: document.getElementById("lineColor"), showPoints: document.getElementById("showPoints"), showGrid: document.getElementById("showGrid"),
+    drawBtn: document.getElementById("drawButton"), resetBtn: document.getElementById("resetButton"),
+    canvas: document.getElementById("chartCanvas"), canvasWrap: document.getElementById("canvasWrap"), tooltip: document.getElementById("tooltip"),
+    title: document.getElementById("chartTitle"), subtitle: document.getElementById("chartSubtitle"), legendLine: document.getElementById("legendLine"),
+    statusBox: document.getElementById("statusBox"), statusText: document.getElementById("statusText"),
+    tableX: document.getElementById("tableXHeader"), tableY: document.getElementById("tableYHeader"), tableBody: document.getElementById("dataTableBody")
+  };
+
+  const ctx = el.canvas.getContext("2d");
+  let state = { data: [], plot: null, cssW: 0, cssH: 0, xVar: 'I', yVar: 'U', dragging: false, sliderBox: null, circuitWidth: 0 };
+
+  // --- 核心计算 ---
+  function getFixedVar(x, y) { return ["U", "I", "R"].find(v => v !== x && v !== y); }
+
+  function calcY(yVar, U, I, R) {
+    if (yVar === "U") return I * R;
+    if (yVar === "I") return R === 0 ? NaN : U / R;
+    if (yVar === "R") return I === 0 ? NaN : U / I;
+    return NaN;
+  }
+
+  function fmtNum(v) {
+    if (!Number.isFinite(v)) return "无定义";
+    const abs = Math.abs(v);
+    if (abs !== 0 && (abs >= 1e6 || abs < 1e-4)) return v.toExponential(4);
+    return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 4 }).format(v);
+  }
+
+  function setStatus(msg, isErr = false) {
+    el.statusText.textContent = msg;
+    el.statusBox.className = isErr ? "status-box error" : "status-box";
+    el.statusBox.querySelector('.status-icon').textContent = isErr ? "!" : "i";
+  }
+
+  function validateAxisSelection(axis) {
+    if (el.xVar.value !== el.yVar.value) return;
+    const alts = ["U", "I", "R"].filter(v => v !== el.xVar.value);
+    if (axis === 'x') el.yVar.value = alts[0];
+    else el.xVar.value = alts[0];
+  }
+
+  function updateUI(changeRange = true) {
+    const fixed = getFixedVar(el.xVar.value, el.yVar.value);
+    el.fixedLabel.textContent = "固定" + variableInfo[fixed].name;
+    el.fixedUnit.textContent = variableInfo[fixed].unit;
+
+    if (changeRange) {
+      const range = defaultRanges[el.xVar.value];
+      el.xMin.value = range[0]; el.xMax.value = range[1];
+      el.fixedValue.value = { U: 12, I: 1, R: 10 }[fixed];
+    }
+
+    el.quickBtns.innerHTML = "";
+    presets[fixed].forEach(v => {
+      const btn = document.createElement("button");
+      btn.className = "quick-button";
+      btn.textContent = fmtNum(v);
+      btn.onclick = () => { el.fixedValue.value = v; drawChart(); };
+      el.quickBtns.appendChild(btn);
+    });
+  }
+
+  // --- 数据生成 ---
+  function generateData() {
+    const x = el.xVar.value, y = el.yVar.value, fixed = getFixedVar(x, y);
+    const fixedVal = Number(el.fixedValue.value);
+    const xMin = Number(el.xMin.value), xMax = Number(el.xMax.value);
+    let samples = Math.floor(Number(el.sampleCount.value));
+    
+    if (xMax <= xMin) throw new Error("横轴最大值必须大于最小值。");
+    if (!Number.isFinite(samples)) samples = 101;
+    samples = Math.min(500, Math.max(20, samples));
+    el.sampleCount.value = samples;
+
+    const data = [], step = (xMax - xMin) / (samples - 1);
+    for (let i = 0; i < samples; i++) {
+      const xv = i === samples - 1 ? xMax : xMin + step * i;
+      const vals = { U: NaN, I: NaN, R: NaN };
+      vals[x] = xv; vals[fixed] = fixedVal;
+      const yv = calcY(y, vals.U, vals.I, vals.R);
+      data.push({ idx: i + 1, x: xv, y: yv, valid: Number.isFinite(yv) });
+    }
+    return { data, xVar: x, yVar: y, fixedVar: fixed, fixedVal, xMin, xMax };
+  }
+
+  function calcYRange(data) {
+    if (!el.autoY.checked) {
+      const min = Number(el.yMin.value), max = Number(el.yMax.value);
+      if (max <= min) throw new Error("纵轴最大值必须大于最小值。");
+      return [min, max];
+    }
+    const valid = data.filter(d => d.valid).map(d => d.y);
+    if (!valid.length) throw new Error("当前参数无法产生有效数据。");
+    
+    let min = Math.min(...valid), max = Math.max(...valid);
+    if (min === max) { min -= 1; max += 1; }
+    else {
+      const pad = (max - min) * 0.08;
+      min -= pad; max += pad;
+    }
+    if (min > 0 && min < max * 0.15) min = 0;
+    el.yMin.value = Number(min.toPrecision(8));
+    el.yMax.value = Number(max.toPrecision(8));
+    return [min, max];
+  }
+
+  // --- 绘图辅助 ---
+  function resizeCanvas() {
+    const rect = el.canvasWrap.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    el.canvas.width = rect.width * dpr;
+    el.canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    state.cssW = rect.width; state.cssH = rect.height;
+    // 画布左侧 40% 留给实物电路图
+    state.circuitWidth = Math.max(220, rect.width * 0.4);
+  }
+
+  function niceNum(range, round) {
+    const exp = Math.floor(Math.log10(range)), frac = range / Math.pow(10, exp);
+    let nice;
+    if (round) nice = frac < 1.5 ? 1 : frac < 3 ? 2 : frac < 7 ? 5 : 10;
+    else nice = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
+    return nice * Math.pow(10, exp);
+  }
+
+  function createTicks(min, max, maxTicks) {
+    const range = niceNum(max - min, false);
+    const step = niceNum(range / (maxTicks - 1), true);
+    const nMin = Math.floor(min / step) * step, nMax = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let v = nMin; v <= nMax + step * 0.5; v += step) {
+      ticks.push(Number(v.toPrecision(12)));
+      if (ticks.length > 50) break;
+    }
+    return ticks;
+  }
+
+  // --- 绘制实物电路图 ---
+  function drawCircuit() {
+    const w = state.circuitWidth, h = state.cssH;
+    const fixed = getFixedVar(el.xVar.value, el.yVar.value);
+    const val = Number(el.fixedValue.value);
+
+    const p = { left: 40, right: w - 40, top: 50, bottom: h - 60 };
+    if (p.right <= p.left) return;
+    const cx = (p.left + p.right) / 2;
+
+    // 导线
+    ctx.strokeStyle = '#34495e'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.rect(p.left, p.top, p.right - p.left, p.bottom - p.top); ctx.stroke();
+
+    // 电源
+    ctx.fillStyle = '#f1c40f'; ctx.fillRect(p.left - 8, (p.top + p.bottom) / 2 - 20, 16, 40);
+    ctx.strokeStyle = '#d35400'; ctx.lineWidth = 2; ctx.strokeRect(p.left - 8, (p.top + p.bottom) / 2 - 20, 16, 40);
+    ctx.fillStyle = '#333'; ctx.font = '14px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('U', p.left - 15, (p.top + p.bottom) / 2 + 5);
+
+    // 定值 R0
+    ctx.fillStyle = '#ecf0f1'; ctx.strokeStyle = '#7f8c8d';
+    ctx.fillRect(cx - 20, p.top - 8, 40, 16); ctx.strokeRect(cx - 20, p.top - 8, 40, 16);
+    ctx.fillStyle = '#2c3e50'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('R₀=5Ω', cx, p.top - 15);
+
+    // 滑动变阻器
+    const sW = 100, sH = 16, sX = cx - sW / 2, sY = p.bottom - 8;
+    const maxVal = fixed === 'R' ? 50 : (fixed === 'U' ? 24 : 5);
+    const sliderPos = sX + Math.max(0, Math.min(1, val / maxVal)) * sW;
+
+    state.sliderBox = { x: sX, y: sY, w: sW, h: sH };
+
+    ctx.fillStyle = '#ecf0f1'; ctx.strokeStyle = '#7f8c8d';
+    ctx.fillRect(sX, sY, sW, sH); ctx.strokeRect(sX, sY, sW, sH);
+
+    // 滑片
+    ctx.fillStyle = state.dragging ? '#e74c3c' : '#3498db';
+    ctx.beginPath();
+    ctx.moveTo(sliderPos, sY);
+    ctx.lineTo(sliderPos - 8, sY - 12);
+    ctx.lineTo(sliderPos + 8, sY - 12);
+    ctx.fill();
+
+    ctx.fillStyle = '#2c3e50'; ctx.font = '12px sans-serif';
+    let label = fixed === 'R' ? '变阻器' : (fixed === 'U' ? '电压源' : '恒流源');
+    ctx.fillText(label + ' = ' + fmtNum(val) + variableInfo[fixed].unit, cx, sY + 30);
+    ctx.fillStyle = '#888'; ctx.fillText('← 手指拖动 →', cx, sY - 35);
+  }
+
+  // --- 绘制图表 ---
+  function drawAxesAndGrid(xMin, xMax, yMin, yMax) {
+    const p = {
+      left: state.circuitWidth + 40,
+      right: state.cssW - 24,
+      top: 24,
+      bottom: state.cssH - 45
+    };
+    p.width = p.right - p.left; p.height = p.bottom - p.top;
+    state.plot = p;
+
+    ctx.font = '12px "PingFang SC", sans-serif';
+    const xTicks = createTicks(xMin, xMax, 8);
+    const yTicks = createTicks(yMin, yMax, 7);
+
+    const toX = v => p.left + ((v - xMin) / (xMax - xMin)) * p.width;
+    const toY = v => p.bottom - ((v - yMin) / (yMax - yMin)) * p.height;
+
+    if (el.showGrid.checked) {
+      ctx.strokeStyle = "#e8edf4"; ctx.fillStyle = "#64748b"; ctx.lineWidth = 1;
+      xTicks.forEach(v => {
+        if (v < xMin - 1e-10 || v > xMax + 1e-10) return;
+        const x = toX(v);
+        ctx.beginPath(); ctx.moveTo(x, p.top); ctx.lineTo(x, p.bottom); ctx.stroke();
+        ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(fmtNum(v), x, p.bottom + 6);
+      });
+      yTicks.forEach(v => {
+        if (v < yMin - 1e-10 || v > yMax + 1e-10) return;
+        const y = toY(v);
+        ctx.beginPath(); ctx.moveTo(p.left, y); ctx.lineTo(p.right, y); ctx.stroke();
+        ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(fmtNum(v), p.left - 8, y);
+      });
+    }
+
+    ctx.strokeStyle = "#64748b"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(p.left, p.top); ctx.lineTo(p.left, p.bottom); ctx.lineTo(p.right, p.bottom); ctx.stroke();
+
+    const xI = variableInfo[el.xVar.value], yI = variableInfo[el.yVar.value];
+    ctx.fillStyle = "#334155"; ctx.font = 'bold 13px "PingFang SC", sans-serif';
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${xI.name} ${xI.symbol} (${xI.unit})`, p.left + p.width / 2, state.cssH - 6);
+    ctx.save(); ctx.translate(p.left - 35, p.top + p.height / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText(`${yI.name} ${yI.symbol} (${yI.unit})`, 0, 0); ctx.restore();
+  }
+
+  function drawCurve(data, xMin, xMax, yMin, yMax, hiIdx = -1) {
+    const p = state.plot; if (!p) return;
+    const toX = v => p.left + ((v - xMin) / (xMax - xMin)) * p.width;
+    const toY = v => p.bottom - ((v - yMin) / (yMax - yMin)) * p.height;
+    const color = el.lineColor.value;
+
+    ctx.save(); ctx.beginPath(); ctx.rect(p.left, p.top, p.width, p.height); ctx.clip();
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.beginPath();
+    
+    let started = false;
+    data.forEach(d => {
+      if (!d.valid || d.y < yMin || d.y > yMax) { started = false; return; }
+      const x = toX(d.x), y = toY(d.y);
+      if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+    });
+    ctx.stroke();
+
+    if (el.showPoints.checked) {
+      ctx.fillStyle = color;
+      data.forEach(d => {
+        if (d.valid && d.y >= yMin && d.y <= yMax) {
+          ctx.beginPath(); ctx.arc(toX(d.x), toY(d.y), 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+      });
+    }
+
+    if (hiIdx >= 0 && data[hiIdx] && data[hiIdx].valid) {
+      const d = data[hiIdx], x = toX(d.x), y = toY(d.y);
+      ctx.strokeStyle = "rgba(37, 99, 235, 0.25)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, p.top); ctx.lineTo(x, p.bottom); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.left, y); ctx.lineTo(p.right, y); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // --- 主渲染 ---
+  function renderCanvas(hiIdx = -1) {
+    ctx.clearRect(0, 0, state.cssW, state.cssH);
+    drawCircuit(); // 左半边画实物
+    drawAxesAndGrid(state.xMin, state.xMax, state.yMin, state.yMax); // 右半边画图表
+    drawCurve(state.data, state.xMin, state.xMax, state.yMin, state.yMax, hiIdx);
+  }
+
+  // --- 更新信息与表格 ---
+  function updateInformation(res, validData) {
+    const xI = variableInfo[res.xVar], yI = variableInfo[res.yVar], fI = variableInfo[res.fixedVar];
+    el.title.textContent = `${yI.name}随${xI.name}变化曲线`;
+    el.subtitle.textContent = `固定${fI.name} ${fI.symbol} = ${fmtNum(res.fixedVal)} ${fI.unit}`;
+    el.legendLine.style.background = el.lineColor.value;
+    el.tableX.textContent = `${xI.name} ${xI.symbol}（${xI.unit}）`;
+    el.tableY.textContent = `${yI.name} ${yI.symbol}（${yI.unit}）`;
+  }
+
+  function renderTable(data, xVar, yVar) {
+    el.tableBody.innerHTML = "";
+    const maxRows = 200;
+    const showData = data.length <= maxRows ? data : data.filter((_, i) => i % Math.ceil(data.length / maxRows) === 0 || i === data.length - 1);
+    const fragment = document.createDocumentFragment();
+    showData.forEach(d => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${d.idx}</td><td>${fmtNum(d.x)} ${variableInfo[xVar].unit}</td><td>${d.valid ? fmtNum(d.y) + ' ' + variableInfo[yVar].unit : '无定义'}</td>`;
+      fragment.appendChild(tr);
+    });
+    el.tableBody.appendChild(fragment);
+  }
+
+  function drawChart() {
+    try {
+      const res = generateData();
+      const [yMin, yMax] = calcYRange(res.data);
+      const valid = res.data.filter(d => d.valid);
+      
+      state.data = res.data; state.xVar = res.xVar; state.yVar = res.yVar; state.xMin = res.xMin; state.xMax = res.xMax; state.yMin = yMin; state.yMax = yMax;
+
+      resizeCanvas();
+      renderCanvas();
+      updateInformation(res, valid);
+      renderTable(res.data, res.xVar, res.yVar);
+      
+      const invalidCount = res.data.length - valid.length;
+      setStatus(invalidCount > 0 ? `已生成，跳过 ${invalidCount} 个无效点。` : `已生成 ${valid.length} 个有效数据点。`);
+    } catch (e) {
+      setStatus(e.message, true);
+    }
+  }
+
+  // --- 交互 ---
+  el.canvas.addEventListener("pointerdown", e => {
+    const rect = el.canvas.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const s = state.sliderBox;
+    if (s && mx > s.x - 20 && mx < s.x + s.w + 20 && my > s.y - 20 && my < s.y + 20) {
+      state.dragging = true;
+      handlePointerMove(e);
+    }
+  });
+
+  el.canvas.addEventListener("pointermove", handlePointerMove);
+
+  function handlePointerMove(e) {
+    const rect = el.canvas.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    // 1. 拖拽变阻器
+    const s = state.sliderBox;
+    if (s) {
+      if (state.dragging) {
+        let ratio = Math.max(0, Math.min(1, (mx - s.x) / s.w));
+        const fixed = getFixedVar(el.xVar.value, el.yVar.value);
+        const maxVal = fixed === 'R' ? 50 : (fixed === 'U' ? 24 : 5);
+        el.fixedValue.value = (ratio * maxVal).toFixed(1);
+        drawChart();
+        return;
+      }
+      if (mx > s.x - 20 && mx < s.x + s.w + 20 && my > s.y - 20 && my < s.y + 20) {
+        el.canvas.style.cursor = 'pointer'; return;
+      } else {
+        el.canvas.style.cursor = 'default';
+      }
+    }
+
+    // 2. 悬停图表
+    const p = state.plot;
+    if (!p || mx < p.left || mx > p.right || my < p.top || my > p.bottom) {
+      el.tooltip.style.display = "none"; renderCanvas(); return;
+    }
+    const xVal = state.xMin + ((mx - p.left) / p.width) * (state.xMax - state.xMin);
+    let nearest = -1, minDist = Infinity;
+    state.data.forEach((d, i) => {
+      if (!d.valid) return;
+      const dist = Math.abs(d.x - xVal);
+      if (dist < minDist) { minDist = dist; nearest = i; }
+    });
+
+    if (nearest >= 0) {
+      const d = state.data[nearest];
+      const xI = variableInfo[state.xVar], yI = variableInfo[state.yVar];
+      el.tooltip.innerHTML = `<strong>${xI.name}</strong>: ${fmtNum(d.x)} ${xI.unit}<br><strong>${yI.name}</strong>: ${fmtNum(d.y)} ${yI.unit}`;
+      el.tooltip.style.display = "block";
+      let left = mx + 15, top = my - 30;
+      if (left + 140 > rect.width) left = mx - 150;
+      el.tooltip.style.left = left + "px"; el.tooltip.style.top = top + "px";
+      renderCanvas(nearest);
+    }
+  }
+
+  el.canvas.addEventListener("pointerup", () => state.dragging = false);
+  el.canvas.addEventListener("pointerleave", () => {
+    state.dragging = false;
+    el.tooltip.style.display = "none";
+    renderCanvas();
+  });
+
+  el.xVar.addEventListener("change", () => { validateAxisSelection("x"); updateUI(true); drawChart(); });
+  el.yVar.addEventListener("change", () => { validateAxisSelection("y"); updateUI(false); drawChart(); });
+  el.autoY.addEventListener("change", () => { el.yMin.disabled = el.yMax.disabled = el.autoY.checked; drawChart(); });
+  el.drawBtn.addEventListener("click", drawChart);
+  el.resetBtn.addEventListener("click", () => {
+    el.xVar.value = "I"; el.yVar.value = "U";
+    el.fixedValue.value = "10"; el.xMin.value = "0"; el.xMax.value = "5";
+    el.sampleCount.value = "101"; el.autoY.checked = true;
+    el.yMin.disabled = el.yMax.disabled = true;
+    el.lineColor.value = "#2563eb"; el.showPoints.checked = false; el.showGrid.checked = true;
+    updateUI(false); drawChart();
+  });
+
+  el.lineColor.addEventListener("input", () => renderCanvas());
+  el.showPoints.addEventListener("change", () => renderCanvas());
+  el.showGrid.addEventListener("change", () => renderCanvas());
+
+  [el.fixedValue, el.xMin, el.xMax, el.yMin, el.yMax, el.sampleCount].forEach(input => {
+    input.addEventListener("keydown", e => { if (e.key === "Enter") drawChart(); });
+  });
+
+  window.addEventListener("resize", () => {
+    if (state.data.length) { resizeCanvas(); renderCanvas(); }
+  });
+
+  updateUI(false);
+  resizeCanvas();
+  drawChart();
+})();
+</script>
+</body>
+</html>
