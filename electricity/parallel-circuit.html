@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>并联电路 · ijhub</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<a class="back" href="../index.html">← 返回主页</a>
+<h1>并联电路</h1>
+<div class="lab">
+<aside class="lab-side">
+  <table class="case-table">
+    <thead><tr><th>规律</th><th>关系</th></tr></thead>
+    <tbody>
+      <tr class="active"><td>电压</td><td>U₁ = U₂ = U总</td></tr>
+      <tr class="active"><td>电流</td><td>I总 = I₁ + I₂</td></tr>
+    </tbody>
+  </table>
+  <h3>控制面板</h3>
+  <label>电源电压 U = <span id="uVal">6.0</span> V
+    <input type="range" id="uRange" min="1" max="12" value="6" step="0.5">
+  </label>
+  <label>支路电阻 R₁ = <span id="r1Val">10.0</span> Ω
+    <input type="range" id="r1Range" min="2" max="30" value="10" step="1">
+  </label>
+  <label>支路电阻 R₂ = <span id="r2Val">15.0</span> Ω
+    <input type="range" id="r2Range" min="2" max="30" value="15" step="1">
+  </label>
+  <div class="readout" id="readout"></div>
+</aside>
+<main class="lab-main">
+  <div class="stage">
+    <canvas id="cv" style="aspect-ratio:16/10"></canvas>
+  </div>
+</main>
+</div>
+<div class="site-footer">
+  作者：zhangzhangfish · <a href="../about.html">简介</a> · <a href="../feedback.html">反馈</a> · <a href="../support.html">支持我们</a>
+</div>
+<script src="../shared/common.js"></script>
+<script>
+(function(){
+  App.injectTopbar();
+  var canvas = document.getElementById('cv');
+  var ctx = canvas.getContext('2d');
+  var W, H;
+  var U = 6, R1 = 10, R2 = 15, offset = 0;
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = rect.width; H = rect.height;
+  }
+
+  function draw() {
+    if (!W) return;
+    ctx.clearRect(0, 0, W, H);
+
+    var I1 = U / R1, I2 = U / R2, It = I1 + I2;
+    var left = W * 0.2, right = W * 0.8, top = H * 0.25, mid = H * 0.45, bot = H * 0.75;
+    var midX = (left + right) / 2;
+
+    // 导线
+    ctx.strokeStyle = '#34495e'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.rect(left, top, right - left, bot - top); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(left, top); ctx.lineTo(midX, top); ctx.lineTo(midX, mid); ctx.lineTo(right, mid); ctx.lineTo(right, top); ctx.stroke();
+
+    // 电源
+    ctx.fillStyle = '#f1c40f'; ctx.fillRect(left - 8, (top + bot) / 2 - 20, 16, 40);
+    ctx.strokeStyle = '#d35400'; ctx.lineWidth = 2; ctx.strokeRect(left - 8, (top + bot) / 2 - 20, 16, 40);
+
+    // 电阻
+    drawResistor(midX, top, 'R₁=' + R1 + 'Ω');
+    drawResistor(midX, mid, 'R₂=' + R2 + 'Ω');
+
+    // 电流粒子
+    offset = (offset + It * 0.3) % 40;
+    ctx.fillStyle = '#f39c12';
+    for (var y = top; y < bot; y += 40) drawDot(left, y + offset);
+    for (var x = left; x < midX; x += 40) drawDot(x + offset, bot);
+    for (var x1 = midX; x1 < right; x1 += (40 / (I1 / It))) drawDot(x1, top);
+    for (var x2 = midX; x2 < right; x2 += (40 / (I2 / It))) drawDot(x2, mid);
+
+    document.getElementById('readout').innerHTML =
+      '总电流 I = I₁ + I₂ = <b>' + It.toFixed(2) + '</b> A<br>' +
+      '支路1电流 I₁ = <b>' + I1.toFixed(2) + '</b> A<br>' +
+      '支路2电流 I₂ = <b>' + I2.toFixed(2) + '</b> A';
+
+    requestAnimationFrame(draw);
+  }
+
+  function drawResistor(cx, cy, text) {
+    ctx.fillStyle = '#ecf0f1'; ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 2;
+    ctx.fillRect(cx - 30, cy - 10, 60, 20); ctx.strokeRect(cx - 30, cy - 10, 60, 20);
+    ctx.fillStyle = '#2c3e50'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(text, cx, cy - 20);
+  }
+  function drawDot(x, y) {
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  document.getElementById('uRange').addEventListener('input', function(e){ U = parseFloat(e.target.value); document.getElementById('uVal').textContent = U; });
+  document.getElementById('r1Range').addEventListener('input', function(e){ R1 = parseFloat(e.target.value); document.getElementById('r1Val').textContent = R1; });
+  document.getElementById('r2Range').addEventListener('input', function(e){ R2 = parseFloat(e.target.value); document.getElementById('r2Val').textContent = R2; });
+
+  window.addEventListener('resize', resize);
+  
+  // 启动
+  resize();
+  draw();
+})();
+</script>
+</body>
+</html>
